@@ -24,11 +24,16 @@ from src.enhancer import SemanticEnhancer
 
 
 def extract_text(pdf_path: Path) -> str:
-    """Langkah 1a: Ekstrak teks mentah dari PDF (fallback OCR untuk scan)."""
+    """Langkah 1a: Ekstrak teks mentah dari PDF (fallback OCR untuk scan).
+
+    Setiap halaman diberi marker `<<<PAGE n>>>` — dipakai LegalTextCleaner
+    untuk deteksi header/footer/watermark berulang berbasis frekuensi
+    lintas-halaman, lalu marker dikonsumsi sebelum teks masuk chunker.
+    """
     pages = []
     with pdfplumber.open(pdf_path) as pdf:
-        for page in pdf.pages:
-            pages.append(page.extract_text() or "")
+        for i, page in enumerate(pdf.pages, start=1):
+            pages.append(f"<<<PAGE {i}>>>\n{page.extract_text() or ''}")
     text = "\n".join(pages)
 
     # TODO: jika teks kosong/terlalu sedikit (PDF hasil scan), jalankan
