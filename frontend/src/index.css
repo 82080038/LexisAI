@@ -1,0 +1,40 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  @apply bg-ink-950 text-slate-100 antialiased;
+  font-family: Inter, system-ui, sans-serif;
+}
+
+/* Scrollbar halus untuk area chat & panel sumber */
+.scroll-thin::-webkit-scrollbar {
+  width: 6px;
+}
+.scroll-thin::-webkit-scrollbar-thumb {
+  @apply rounded-full bg-ink-700;
+}
+.scroll-thin::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* Render markdown-lite jawaban: bold, list, paragraf */
+.answer-body p {
+  @apply mb-3 leading-relaxed;
+}
+.answer-body strong {
+  @apply font-semibold text-gold-400;
+}
+.answer-body ul,
+.answer-body ol {
+  @apply mb-3 ml-5 list-disc space-y-1;
+}
+.answer-body ol {
+  @apply list-decimal;
+}

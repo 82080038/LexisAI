@@ -1,0 +1,371 @@
+{
+  "version": "2026-10-03T19:52:03Z",
+  "dim": 384,
+  "model": "Xenova/all-MiniLM-L6-v2",
+  "docs": [
+    {
+      "key": "uu-8-1981",
+      "file": "uu-8-1981.json",
+      "chunks": 571,
+      "bytes": 548638,
+      "sha256": "995fb44b134d22e1c4ea3939a988d741c1cecc5d8fc56709c79538fea5b76bb9"
+    },
+    {
+      "key": "uu-7-1992",
+      "file": "uu-7-1992.json",
+      "chunks": 122,
+      "bytes": 143905,
+      "sha256": "8f1696dbfee56b1ca7165d1fde6816ff427d89c123a0cc05d8f58f7d948e1dfe"
+    },
+    {
+      "key": "uu-8-1995",
+      "file": "uu-8-1995.json",
+      "chunks": 232,
+      "bytes": 324859,
+      "sha256": "50d8d16227ecb5b5495a3404e334738680522e031f33554cafae2fb05fbb6d32"
+    },
+    {
+      "key": "uu-31-1997",
+      "file": "uu-31-1997.json",
+      "chunks": 707,
+      "bytes": 759627,
+      "sha256": "9e4e1488c3dcaf604de2f327df66e1bbb0b7ee69c7c0d43fba9a765c7b052787"
+    },
+    {
+      "key": "uu-10-1998",
+      "file": "uu-10-1998.json",
+      "chunks": 68,
+      "bytes": 91706,
+      "sha256": "40a59c4fb658892b7015a134267cb3a5e3a476c670d77eed3f5b0cd1c0fac854"
+    },
+    {
+      "key": "uu-31-1999",
+      "file": "uu-31-1999.json",
+      "chunks": 90,
+      "bytes": 92376,
+      "sha256": "5218c12668201764959943dade5cb49c92cf1ac2ffbf1da5a7bf40dfbe08fe3a"
+    },
+    {
+      "key": "uu-8-1999",
+      "file": "uu-8-1999.json",
+      "chunks": 129,
+      "bytes": 134551,
+      "sha256": "ee5d52bbee2b3d2490cc63e306c9917311b73f79bfc0cc5df39101d63ab90955"
+    },
+    {
+      "key": "uu-26-2000",
+      "file": "uu-26-2000.json",
+      "chunks": 102,
+      "bytes": 106342,
+      "sha256": "05c063c14700589cfc2fd6b895e2ca63c72f5504edeefe43cff60520ded7907e"
+    },
+    {
+      "key": "uu-20-2001",
+      "file": "uu-20-2001.json",
+      "chunks": 41,
+      "bytes": 78429,
+      "sha256": "77528a4b7036c775cb5e94c7b8c40b3a06ad7515024feddb3eca11a28e942e02"
+    },
+    {
+      "key": "uu-2-2002",
+      "file": "uu-2-2002.json",
+      "chunks": 90,
+      "bytes": 109368,
+      "sha256": "482ca8c0749db135bf882be2a20115d2d741c644b61fcbc81f0423751a2e83b2"
+    },
+    {
+      "key": "uu-30-2002",
+      "file": "uu-30-2002.json",
+      "chunks": 144,
+      "bytes": 148794,
+      "sha256": "bdd67faf5a90dcf1985f6aa5e8247ea0b5abd751cd04aa47a004991383ed0953"
+    },
+    {
+      "key": "uu-13-2003",
+      "file": "uu-13-2003.json",
+      "chunks": 386,
+      "bytes": 396572,
+      "sha256": "184ad14ef7338d0e1ae0d29d627d33fa4c2e2c544f4b82aa6c3d1901980ab63e"
+    },
+    {
+      "key": "uu-15-2003",
+      "file": "uu-15-2003.json",
+      "chunks": 4,
+      "bytes": 5663,
+      "sha256": "208ebf174bd57de4863e50942bd65991804923738cf020418c41a6ca8809470b"
+    },
+    {
+      "key": "uu-16-2004",
+      "file": "uu-16-2004.json",
+      "chunks": 84,
+      "bytes": 88319,
+      "sha256": "e9e052c94db8d6a3597fb70038603fee05fbc9fd47f302d684e2e4d809dc17b2"
+    },
+    {
+      "key": "uu-31-2004",
+      "file": "uu-31-2004.json",
+      "chunks": 222,
+      "bytes": 235255,
+      "sha256": "f7b777ce7262c244ff5d90624f2ae8f7e058c154fc571b991dd3df6861d67db8"
+    },
+    {
+      "key": "uu-17-2006",
+      "file": "uu-17-2006.json",
+      "chunks": 181,
+      "bytes": 268113,
+      "sha256": "699941809214f4199a4e6a541ed798fa65b4c9fe7b2fb841ef48f22f382fd86a"
+    },
+    {
+      "key": "uu-21-2007",
+      "file": "uu-21-2007.json",
+      "chunks": 134,
+      "bytes": 130411,
+      "sha256": "c051b9db1130ad080fb4ac5ef48d1b5d4245bf8c1f3518df47fbabdbfbecb81a"
+    },
+    {
+      "key": "uu-39-2007",
+      "file": "uu-39-2007.json",
+      "chunks": 118,
+      "bytes": 179881,
+      "sha256": "a114fd5df9602cff1ca20969280376ebfc37909be55b184c2ff8dad839bc2cb9"
+    },
+    {
+      "key": "uu-11-2008",
+      "file": "uu-11-2008.json",
+      "chunks": 58,
+      "bytes": 92459,
+      "sha256": "d6899a374c6db4c8072e3f96e45c3c502a8bc0ad9a24d2506c1924165181ae92"
+    },
+    {
+      "key": "uu-16-2009",
+      "file": "uu-16-2009.json",
+      "chunks": 5,
+      "bytes": 15452,
+      "sha256": "6d89331a57f5ca5ef71605f8721ae52675c13bfcfc70d34d0a3b958d0c1033f5"
+    },
+    {
+      "key": "uu-32-2009",
+      "file": "uu-32-2009.json",
+      "chunks": 254,
+      "bytes": 271174,
+      "sha256": "d4873404a439038876fbcbd354434b3e3bd43d96bbb55324983850337a0b7b1e"
+    },
+    {
+      "key": "uu-35-2009",
+      "file": "uu-35-2009.json",
+      "chunks": 310,
+      "bytes": 320395,
+      "sha256": "b31d26ef6b482772010c8ec2329018c8dd5d7b6e10a5b4b52de978248e75e6c6"
+    },
+    {
+      "key": "uu-36-2009",
+      "file": "uu-36-2009.json",
+      "chunks": 410,
+      "bytes": 367676,
+      "sha256": "5f1a50dd6ee945a934008c3323513d5f3568b20af1f3b26f4115d76f71d2a405"
+    },
+    {
+      "key": "uu-4-2009",
+      "file": "uu-4-2009.json",
+      "chunks": 350,
+      "bytes": 309692,
+      "sha256": "41591b2675f7d65c7d1b7dbf93280d2fa4261dd2575b7b4d0421e5e2dc333a64"
+    },
+    {
+      "key": "uu-45-2009",
+      "file": "uu-45-2009.json",
+      "chunks": 99,
+      "bytes": 124000,
+      "sha256": "a2768dd5dd1fb74b72158577eac77a7436a951dd665cf6e2d48498a29630d14e"
+    },
+    {
+      "key": "uu-8-2010",
+      "file": "uu-8-2010.json",
+      "chunks": 200,
+      "bytes": 203776,
+      "sha256": "5c4de68eae519611bf47b424b22894b9c28d2f57b6eed0c3c91928f39e311808"
+    },
+    {
+      "key": "uu-21-2011",
+      "file": "uu-21-2011.json",
+      "chunks": 142,
+      "bytes": 201161,
+      "sha256": "2acc5d4edd02b870b80b4e5b6048be42ebdd3ffa0a417fad03c8fda5860835c3"
+    },
+    {
+      "key": "uu-6-2011",
+      "file": "uu-6-2011.json",
+      "chunks": 290,
+      "bytes": 281716,
+      "sha256": "1cc32fbf9caa4f4840d4b193c45b94bec75f9d6e682ac5669cdd97b57459102c"
+    },
+    {
+      "key": "uu-18-2012",
+      "file": "uu-18-2012.json",
+      "chunks": 308,
+      "bytes": 281656,
+      "sha256": "400bc609d7d74c22af80c3c8ad045ce7da13461c12bf637a5d7b70fffcfa8b7a"
+    },
+    {
+      "key": "uu-18-2013",
+      "file": "uu-18-2013.json",
+      "chunks": 228,
+      "bytes": 257185,
+      "sha256": "4a1dbe686a0983db37afc58ae170d6da38b9df27bcd2d695c1bd1ae293d3eae4"
+    },
+    {
+      "key": "uu-28-2014",
+      "file": "uu-28-2014.json",
+      "chunks": 239,
+      "bytes": 250300,
+      "sha256": "72e50185adcd9549583e0bb8813c2623ecf6fe5bbce4996e3086a1800302e329"
+    },
+    {
+      "key": "uu-3-2014",
+      "file": "uu-3-2014.json",
+      "chunks": 250,
+      "bytes": 256398,
+      "sha256": "ad3e8c81da2a5b19a84a5c4607ba9d389a28f5a7c979850d9be9633ccb178f86"
+    },
+    {
+      "key": "uu-32-2014",
+      "file": "uu-32-2014.json",
+      "chunks": 91,
+      "bytes": 125954,
+      "sha256": "35b5941cd29e51859e2bdac5b9f6738451e53e976b551782ba25f11a23b76715"
+    },
+    {
+      "key": "uu-10-2015",
+      "file": "uu-10-2015.json",
+      "chunks": 8,
+      "bytes": 15959,
+      "sha256": "dfd084eed4933e77fbeafe2ac2c52efe8dce70abb5ca8fcc273f959fc64e7ae3"
+    },
+    {
+      "key": "uu-13-2016",
+      "file": "uu-13-2016.json",
+      "chunks": 359,
+      "bytes": 368037,
+      "sha256": "73fd899eec8add421aab0508a3b82e7eac9bae081b84817ff6778ae34ce36c9e"
+    },
+    {
+      "key": "uu-19-2016",
+      "file": "uu-19-2016.json",
+      "chunks": 12,
+      "bytes": 32276,
+      "sha256": "80291fe3880820fc6abed1297c9c1130d39f1e59248e4ba8ded15c23bd9361e0"
+    },
+    {
+      "key": "uu-20-2016",
+      "file": "uu-20-2016.json",
+      "chunks": 215,
+      "bytes": 220823,
+      "sha256": "a70204e7162cec5e838b1403e4f2654d3b2da81dc489cf07156becd1dd33b82e"
+    },
+    {
+      "key": "uu-7-2017",
+      "file": "uu-7-2017.json",
+      "chunks": 1070,
+      "bytes": 1303663,
+      "sha256": "82be6a6933def3e0f828d303d7d92e57b54a4d12daacf81f113740962af94632"
+    },
+    {
+      "key": "uu-5-2018",
+      "file": "uu-5-2018.json",
+      "chunks": 79,
+      "bytes": 92379,
+      "sha256": "cf12f788eb5e02f38a80ebc6c5b7f0cf945d162807769a22ebc32c07be4b5da1"
+    },
+    {
+      "key": "uu-6-2018",
+      "file": "uu-6-2018.json",
+      "chunks": 161,
+      "bytes": 166036,
+      "sha256": "39f919228bfc667561c08453c6b9ba906594a0587917efe7ce7fdbf998221949"
+    },
+    {
+      "key": "uu-19-2019",
+      "file": "uu-19-2019.json",
+      "chunks": 47,
+      "bytes": 62931,
+      "sha256": "1db3d3087418af05c5083b4f8c7e22c9b813e8312ad35976cf861b353bfda8b2"
+    },
+    {
+      "key": "uu-21-2019",
+      "file": "uu-21-2019.json",
+      "chunks": 192,
+      "bytes": 195331,
+      "sha256": "82e5c866ede3cbaddb6b8d5a35235b6765fcaa2e9fb2280be161755b8ab0d3a3"
+    },
+    {
+      "key": "uu-3-2020",
+      "file": "uu-3-2020.json",
+      "chunks": 226,
+      "bytes": 242164,
+      "sha256": "2f4a38ccdd56f3cf905df80358bd32661272f3706c526d4f56871a7894125f16"
+    },
+    {
+      "key": "uu-11-2021",
+      "file": "uu-11-2021.json",
+      "chunks": 39,
+      "bytes": 47453,
+      "sha256": "c943e19473ec2c924d41fd8e58027a43103d76b5adbb7ced0b83948de120e0c9"
+    },
+    {
+      "key": "uu-7-2021",
+      "file": "uu-7-2021.json",
+      "chunks": 154,
+      "bytes": 420602,
+      "sha256": "99b7df8e7298aa351d9f419f504b238093085e4dd1a031767a4cd508edf2a0c4"
+    },
+    {
+      "key": "uu-12-2022",
+      "file": "uu-12-2022.json",
+      "chunks": 186,
+      "bytes": 193637,
+      "sha256": "05f69246636020320d0450589d4fbaf04bad49e9661d3895256c4ac5ee9721a7"
+    },
+    {
+      "key": "uu-1-2023",
+      "file": "uu-1-2023.json",
+      "chunks": 1132,
+      "bytes": 1181242,
+      "sha256": "31b7cc98d27285ff9770a7a36c9806cf937e3865921ecbaf65a6cdd61d5f406b"
+    },
+    {
+      "key": "uu-17-2023",
+      "file": "uu-17-2023.json",
+      "chunks": 853,
+      "bytes": 876563,
+      "sha256": "3f0db60a1bd5a8d09b4dd0544a2736424322d9fd515b19f5c08d03ebcb47c620"
+    },
+    {
+      "key": "uu-4-2023",
+      "file": "uu-4-2023.json",
+      "chunks": 1343,
+      "bytes": 2021297,
+      "sha256": "9d2d5165a8375bb1badd2d57b97877a88eb2bb6f074601e1d873f315c19eb5d6"
+    },
+    {
+      "key": "uu-1-2024",
+      "file": "uu-1-2024.json",
+      "chunks": 35,
+      "bytes": 67391,
+      "sha256": "c831a46aac2f93efbd0c11444c42fa42bf6cd35ad621b642c43ba38633b88073"
+    },
+    {
+      "key": "uu-20-2025",
+      "file": "uu-20-2025.json",
+      "chunks": 697,
+      "bytes": 714937,
+      "sha256": "135f1c2928e3a6f8bbab4b65aed86c3e49ce5af99cf1fff3583e7e98682886da"
+    },
+    {
+      "key": "uu-5-2026",
+      "file": "uu-5-2026.json",
+      "chunks": 34,
+      "bytes": 54073,
+      "sha256": "f7713bb798cfe5115f76aabee04b42f3c36d29026e3d26de577566ca50e8c2d9"
+    }
+  ]
+}

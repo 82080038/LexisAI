@@ -94,8 +94,13 @@ LexisAI/
 │   └── llm.py            # Factory klien LLM (OpenAI-compatible)
 ├── prompts/              # System prompts multi-agent
 ├── chroma_db/            # Vector store persisten (auto-generated)
+├── frontend/             # PWA React + Vite + Tailwind — RAG 100% di browser user
+│   └── public/data/      # Korpus hasil export (per-UU + manifest sha256)
+├── scripts/
+│   └── export_index.py   # Export chroma_db → file statis per-UU untuk FE
 ├── ingest.py             # Pipeline: extract → clean → chunk → enhance → embed
 ├── main.py               # Tanya jawab RAG (CLI)
+├── api.py                # REST API FastAPI (opsional, untuk dev/CLI)
 ├── requirements.txt
 ├── .env.example
 └── README.md
@@ -135,9 +140,33 @@ venv/bin/python ingest.py          # mode LLM penuh (cleaner+chunker+enhancer vi
 ```
 
 ### 5. Jalankan Aplikasi Utama
+
+**CLI:**
 ```bash
 venv/bin/python main.py "Pertanyaan hukum Anda di sini"
 ```
+
+**Web App (PWA — tanpa server, semua komputasi di browser user):**
+```bash
+# 1. Export korpus dari chroma_db ke file statis (sekali / tiap update UU)
+venv/bin/python scripts/export_index.py
+
+# 2. Jalankan frontend (port 5173)
+cd frontend
+npm install   # sekali saja
+npm run dev
+```
+Buka http://localhost:5173 — PWA: kunjungan pertama mengunduh korpus (~16MB) ke IndexedDB,
+lalu bekerja **offline penuh**. Retrieval via `all-MiniLM-L6-v2` (Transformers.js/ONNX)
+dan generasi via WebLLM (`Qwen2.5-1.5B`, WebGPU) — keduanya berjalan di perangkat user.
+
+**Deploy produksi (Rp 0):** `npm run build`, unggah `dist/` ke GitHub Pages/Hostinger.
+Korpus `public/data/` bisa ikut di-deploy, atau dihost di HuggingFace Datasets lalu
+set `VITE_CORPUS_BASE=https://huggingface.co/datasets/<user>/<repo>/resolve/main/data`
+saat build. Update korpus cukup jalankan ulang `export_index.py` — user hanya mengunduh
+file UU yang berubah (delta per sha256).
+
+**API FastAPI (opsional):** `venv/bin/uvicorn api:app --port 8001` untuk dev/perbandingan.
 
 ---
 
