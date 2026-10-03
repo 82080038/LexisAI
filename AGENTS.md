@@ -6,6 +6,8 @@
 venv/bin/python ingest.py --fast   # ingestion regex+embedding lokal (tanpa LLM)
 venv/bin/python ingest.py          # ingestion penuh via Ollama/OpenAI
 venv/bin/python main.py "pertanyaan"  # QA RAG dari chroma_db
+venv/bin/python scripts/export_index.py   # chroma_db -> frontend/public/data/*.json
+venv/bin/python scripts/build_graph.py    # graf rujukan -> frontend/public/data/graph.json
 ```
 
 ## Konvensi file & korpus

@@ -95,12 +95,15 @@ export async function loadCorpus(onProgress = () => {}) {
     const raw = b64ToInt8(payload.vec_b64)
     const scale = payload.vec_scale
     for (const c of payload.chunks) {
-      const citation = `UU No. ${payload.nomor_uu} Tahun ${payload.tahun_uu}, Pasal ${c.pasal}` +
+      const citation = `UU No. ${payload.nomor_uu} Tahun ${payload.tahun_uu}` +
+        (c.bab ? `, ${c.bab}` : '') +
+        `, Pasal ${c.pasal}` +
         (c.ayat ? ` ayat (${c.ayat})` : '')
       chunks.push({
         citation,
         pasal: c.pasal,
         ayat: c.ayat,
+        bab: c.bab,
         text: c.text,
         tentang: payload.tentang,
         nomor_uu: payload.nomor_uu,
@@ -175,10 +178,13 @@ export async function loadFromCacheOnly() {
     }
     for (const c of payload.chunks) {
       chunks.push({
-        citation: `UU No. ${payload.nomor_uu} Tahun ${payload.tahun_uu}, Pasal ${c.pasal}` +
+        citation: `UU No. ${payload.nomor_uu} Tahun ${payload.tahun_uu}` +
+          (c.bab ? `, ${c.bab}` : '') +
+          `, Pasal ${c.pasal}` +
           (c.ayat ? ` ayat (${c.ayat})` : ''),
         pasal: c.pasal,
         ayat: c.ayat,
+        bab: c.bab,
         text: c.text,
         tentang: payload.tentang,
         nomor_uu: payload.nomor_uu,

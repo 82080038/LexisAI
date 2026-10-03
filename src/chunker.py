@@ -17,6 +17,19 @@ AYAT_PATTERN = re.compile(r"^\s*\(\d+\)", re.MULTILINE)
 CHUNK_BOUNDARY = "===CHUNK_BOUNDARY==="
 MAX_WORDS_PER_CHUNK = 800
 
+# Penanda struktur di atas pasal — dua layout: judul inline atau baris berikut.
+STRUCT_MARK = re.compile(
+    r"^\s*(BAB|Bagian|Paragraf)\s+([IVXLCDMivxlcdm0-9)(.\-]+)[ \t]*([^\n]*)\n(?:\s*([^\n]+)\n)?"
+    r"|^\s*(PENJELASAN)[ \t]*([^\n]*)\n(?:\s*([^\n]+)\n)?",
+    re.MULTILINE,
+)
+# Versi strip: hapus baris penanda + (opsional) baris judul CAPS dari isi chunk.
+STRUCT_STRIP = re.compile(
+    r"(?m)^\s*(?:BAB|Bagian|Paragraf)\s+[IVXLCDMivxlcdm0-9)(.\-]+[^\n]*\n"
+    r"(?:\s*[A-Z][A-Z0-9\s.,()\-/]{2,80}\n)?"
+)
+ORPHAN_MARK = re.compile(r"(?m)^\s*(?:Pasal|Ayat|BAB|Bagian|Paragraf)\s*$")
+
 
 @dataclass
 class LegalChunk:
@@ -49,21 +62,67 @@ class LegalChunkingAgent:
         matches = list(PASAL_PATTERN.finditer(text))
         chunks: list[LegalChunk] = []
 
+        # Posisi penanda struktur -> metadata bab per pasal
+        struct_marks = self._scan_structure(text)
+
         for i, match in enumerate(matches):
             start = match.start()
             end = matches[i + 1].start() if i + 1 < len(matches) else len(text)
             pasal_no = match.group(1)
-            body = text[start:end].strip()
+            body = text[start:end]
+            # Buang penanda struktur (BAB/Bagian/Paragraf + judul) dari isi
+            # dan penanda yatim hasil potong halaman yang tersisa.
+            body = STRUCT_STRIP.sub("", body)
+            body = ORPHAN_MARK.sub("", body).strip()
             if not body:
                 continue
 
             meta = {"nomor_uu": nomor_uu, "tahun_uu": tahun_uu,
                     "tentang": tentang, "pasal": pasal_no}
+            bab = self._bab_at(struct_marks, start)
+            if bab:
+                meta["bab"] = bab
             chunks.extend(self._split_long_pasal(body, pasal_no, meta))
 
         # TODO: tangani dokumen tanpa penanda "Pasal" (konsiderans, penjelasan,
         # lampiran) sebagai chunk tersendiri
         return chunks
+
+    @staticmethod
+    def _scan_structure(text: str) -> list[tuple[int, str]]:
+        """Kumpulkan (posisi, label) penanda BAB/Bagian/Paragraf berurutan."""
+        marks = []
+        for m in STRUCT_MARK.finditer(text):
+            if m.group(5):  # bagian PENJELASAN (tanpa nomor romawi)
+                marks.append((m.start(), "PENJELASAN"))
+                continue
+            else:
+                label = f"{m.group(1)} {m.group(2)}"
+                title = (m.group(3) or m.group(4) or "").strip()
+            if title and len(title) <= 80 and title == title.upper():
+                label += f" {title}"
+            marks.append((m.start(), label))
+        marks.sort(key=lambda x: x[0])
+        # dedup posisi (pattern kadang overlap layout inline vs dua-baris)
+        dedup = []
+        for pos, label in marks:
+            if dedup and abs(pos - dedup[-1][0]) < 200:
+                if len(label) > len(dedup[-1][1]):
+                    dedup[-1] = (pos, label)
+                continue
+            dedup.append((pos, label))
+        return dedup
+
+    @staticmethod
+    def _bab_at(struct_marks: list, pos: int) -> str | None:
+        """BAB/Bagian/Paragraf terakhir yang muncul SEBELUM posisi pasal."""
+        bab = None
+        for m_pos, label in struct_marks:
+            if m_pos < pos:
+                bab = label
+            else:
+                break
+        return bab
 
     @staticmethod
     def _split_long_pasal(

@@ -16,6 +16,10 @@ import { loadCorpus, loadFromCacheOnly, getIndex } from './lib/corpus'
 import { embedQuery } from './lib/embed'
 import { topK } from './lib/search'
 import { generateAnswer, webgpuAvailable, LLM_MODEL } from './lib/llm'
+import {
+  generateAnswerCPU,
+  CPU_MODEL_LABEL,
+} from './lib/llm-cpu'
 import ReloadPrompt from './ReloadPrompt'
 
 const SUGGESTIONS = [
@@ -233,13 +237,9 @@ export default function App() {
 
   useEffect(() => {
     navigator.storage?.persist?.().catch(() => {})
-    // Cek persyaratan DULU — bila WebGPU tak ada, app berhenti di gate
-    // (bukan diam-diam berjalan dalam mode terdegradasi).
-    webgpuAvailable().then((ok) => {
-      setHasWebGPU(ok)
-      if (ok) startCorpus()
-      else setBoot({ phase: 'gate' })
-    })
+    // Cek GPU di latar — tier LLM dipilih senyap saat bertanya.
+    webgpuAvailable().then(setHasWebGPU)
+    startCorpus()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -280,77 +280,74 @@ export default function App() {
       setStatusLine({ icon: 'search', text: 'Menelusuri pasal…' })
       const sources = topK(idx, qv, 5)
 
-      // 3. Generasi jawaban — fallback ke retrieval-only bila LLM
-      //    gagal apa pun sebabnya (tanpa WebGPU, adapter, OOM, dll)
+      // 3. Generasi — pilih mesin terbaik secara senyap:
+      //    GPU (WebLLM) -> CPU/WASM (model ringan) -> retrieval-only
       let llmErr = null
-      if (hasWebGPU === true) {
+      try {
+        const useGPU = hasWebGPU === true
+        const gen = useGPU ? generateAnswer : generateAnswerCPU
+        const label = useGPU ? `${LLM_MODEL} · GPU` : CPU_MODEL_LABEL
         streamingIdx.current = -1
         let first = true
         const t0 = performance.now()
-        try {
-          const final = await generateAnswer(
-            q,
-            buildContext(sources),
-            (p) =>
-              setStatusLine({
-                icon: 'llm',
-                text: p.text?.startsWith('Loading')
-                  ? 'Unduh bobot LLM…'
-                  : `Menyiapkan LLM… ${p.text || ''}`,
-                pct: p.progress,
-              }),
-            (acc) => {
-              if (first) {
-                first = false
-                setStatusLine(null)
-                setMessages((m) => {
-                  streamingIdx.current = m.length
-                  return [...m, { role: 'assistant', content: acc, sources }]
-                })
-              } else {
-                setMessages((m) => {
-                  const copy = [...m]
-                  copy[streamingIdx.current] = {
-                    ...copy[streamingIdx.current],
-                    content: acc,
-                  }
-                  return copy
-                })
-              }
-            },
-          )
-          const ms = Math.round(performance.now() - t0)
-          setMessages((m) => {
-            const copy = [...m]
-            copy[streamingIdx.current] = {
-              ...copy[streamingIdx.current],
-              content: final,
-              meta: `${LLM_MODEL} · lokal · ${ms.toLocaleString('id-ID')} ms`,
+        const final = await gen(
+          q,
+          buildContext(sources),
+          (p) =>
+            setStatusLine({
+              icon: 'llm',
+              text: p.text?.startsWith('Loading')
+                ? 'Unduh bobot LLM…'
+                : `Menyiapkan jawaban… ${p.text || ''}`,
+              pct: p.progress,
+            }),
+          (acc) => {
+            if (first) {
+              first = false
+              setStatusLine(null)
+              setMessages((m) => {
+                streamingIdx.current = m.length
+                return [...m, { role: 'assistant', content: acc, sources }]
+              })
+            } else {
+              setMessages((m) => {
+                const copy = [...m]
+                copy[streamingIdx.current] = {
+                  ...copy[streamingIdx.current],
+                  content: acc,
+                }
+                return copy
+              })
             }
-            return copy
-          })
-          return
-        } catch (e) {
-          llmErr = e?.message ?? String(e)
-          // hapus gelembung streaming setengah jadi (bila ada)
-          if (streamingIdx.current >= 0) {
-            setMessages((m) => m.filter((_, i) => i !== streamingIdx.current))
-            streamingIdx.current = -1
+          },
+        )
+        const ms = Math.round(performance.now() - t0)
+        setMessages((m) => {
+          const copy = [...m]
+          copy[streamingIdx.current] = {
+            ...copy[streamingIdx.current],
+            content: final,
+            meta: `${label} · lokal · ${ms.toLocaleString('id-ID')} ms`,
           }
+          return copy
+        })
+        return
+      } catch (e) {
+        llmErr = e?.message ?? String(e)
+        if (streamingIdx.current >= 0) {
+          setMessages((m) => m.filter((_, i) => i !== streamingIdx.current))
+          streamingIdx.current = -1
         }
       }
 
-      const reason =
-        llmErr != null
-          ? `LLM lokal gagal dimuat (${llmErr}).`
-          : hasWebGPU === null
-            ? 'Browser ini tidak mendukung WebGPU, jadi jawaban tidak dapat dirangkum LLM lokal.'
-            : 'WebGPU tidak tersedia di browser ini, jadi jawaban tidak dapat dirangkum LLM lokal.'
       setMessages((m) => [
         ...m,
         {
           role: 'assistant',
-          content: buildRetrievalOnlyAnswer(sources, reason),
+          content: buildRetrievalOnlyAnswer(
+            sources,
+            `Model bahasa tidak dapat dimuat di perangkat ini (${llmErr}).`,
+          ),
           sources,
           meta: 'retrieval-only',
         },
@@ -412,7 +409,7 @@ export default function App() {
           )}
           {hasWebGPU === false && (
             <span className="flex items-center gap-1.5 rounded-full bg-ink-800 px-2.5 py-1 text-[11px] font-medium text-slate-400 ring-1 ring-ink-700">
-              <Cpu size={11} /> LLM tak tersedia
+              <Cpu size={11} /> mode ringan
             </span>
           )}
         </div>
@@ -420,54 +417,7 @@ export default function App() {
 
       {/* area chat */}
       <main className="scroll-thin flex-1 space-y-5 overflow-y-auto px-5 py-6">
-        {boot.phase === 'gate' ? (
-          <div className="flex h-full flex-col items-center justify-center gap-6 pb-10 text-center">
-            <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-amber-500/15 ring-1 ring-amber-500/40">
-              <Cpu size={30} className="text-amber-400" />
-            </div>
-            <div className="max-w-lg">
-              <h2 className="font-serif text-xl font-bold text-slate-100">
-                WebGPU diperlukan untuk LLM lokal
-              </h2>
-              <p className="mx-auto mt-2 text-sm leading-relaxed text-slate-400">
-                LexisAI menjalankan model bahasa langsung di GPU Anda — ini
-                tidak dapat diaktifkan oleh aplikasi; ia harus didukung
-                browser + GPU + driver Anda.
-              </p>
-              <ul className="mx-auto mt-4 max-w-md space-y-2 text-left text-[13px] text-slate-300">
-                <li className="flex gap-2">
-                  <span className="text-gold-400">1.</span>
-                  Gunakan <strong>Chrome / Edge / Brave terbaru</strong> di
-                  komputer dengan GPU (Firefox &amp; Safari belum mendukung).
-                </li>
-                <li className="flex gap-2">
-                  <span className="text-gold-400">2.</span>
-                  Pastikan akselerasi hardware aktif dan driver GPU
-                  diperbarui — cek <code className="rounded bg-ink-800 px-1.5 py-0.5 font-mono text-gold-400">chrome://gpu</code> (cari status <em>WebGPU: Hardware accelerated</em>).
-                </li>
-                <li className="flex gap-2">
-                  <span className="text-gold-400">3.</span>
-                  Di VM/WSL/headless: WebGPU umumnya tidak tersedia — jalankan
-                  di mesin fisik dengan GPU.
-                </li>
-              </ul>
-            </div>
-            <div className="flex flex-col items-center gap-3">
-              <button
-                onClick={() => window.location.reload()}
-                className="rounded-xl bg-gold-500 px-5 py-2.5 text-sm font-semibold text-ink-950 shadow-lg shadow-gold-500/20 hover:bg-gold-400"
-              >
-                Cek ulang
-              </button>
-              <button
-                onClick={startCorpus}
-                className="text-xs text-slate-500 underline underline-offset-4 hover:text-slate-300"
-              >
-                Lanjutkan tanpa LLM — hanya pencarian pasal (mode terbatas)
-              </button>
-            </div>
-          </div>
-        ) : !ready ? (
+        {!ready ? (
           <div className="flex h-full flex-col items-center justify-center gap-6 pb-10 text-center">
             <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-gold-400 to-gold-500 shadow-2xl shadow-gold-500/20">
               {boot.phase === 'error' ? (

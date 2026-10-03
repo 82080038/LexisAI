@@ -7,9 +7,11 @@ const URL = process.argv[2] || 'http://localhost:5173/'
 const OFFLINE_TEST = process.argv.includes('--offline')
 const report = { console: [], errors: [], failed: [], notes: [] }
 
-const browser = await chromium.launch({ headless: true })
-const ctx = await browser.newContext()
-const page = await ctx.newPage()
+// Profile persisten: Cache API (model HF) + IndexedDB (korpus) awet antar-run
+// — seperti user nyata yang membuka aplikasi berulang.
+const PROFILE = '/tmp/lexisai-e2e-profile'
+const ctx = await chromium.launchPersistentContext(PROFILE, { headless: true })
+const page = ctx.pages()[0] || (await ctx.newPage())
 
 page.on('console', (m) => {
   if (['error', 'warning'].includes(m.type()))
@@ -18,6 +20,7 @@ page.on('console', (m) => {
 page.on('pageerror', (e) =>
   report.errors.push(`pageerror: ${e.message.slice(0, 300)}`),
 )
+page.on('crash', () => report.errors.push('PAGE CRASH (kemungkinan OOM)'))
 page.on('requestfailed', (r) =>
   report.failed.push(
     `${r.method()} ${r.url().slice(0, 120)} -> ${r.failure()?.errorText}`,
@@ -28,16 +31,6 @@ try {
   // ---- TEST 1: boot & corpus ----
   await page.goto(URL, { waitUntil: 'domcontentloaded' })
   report.notes.push('goto OK')
-  // Bila WebGPU tak ada -> app berhenti di gate persyaratan (by design).
-  // Lanjutkan mode terbatas untuk tetap menguji jalur retrieval.
-  await page.waitForTimeout(2500)
-  const gate = page.getByText('WebGPU diperlukan untuk LLM lokal')
-  if (await gate.count()) {
-    report.notes.push('gate WebGPU tampil (by design)')
-    await page.screenshot({ path: '/tmp/lexisai-gate.png' })
-    await page.getByText('Lanjutkan tanpa LLM').click()
-    report.notes.push('klik lanjut mode terbatas')
-  }
   await page.waitForSelector('textarea:not([disabled])', { timeout: 120000 })
   report.notes.push('boot ready: textarea enabled')
   const badge = await page.locator('header').innerText()
@@ -62,7 +55,8 @@ try {
       () =>
         document.body.innerText.includes('Dasar hukum') ||
         document.body.innerText.includes('Gagal:'),
-      { timeout: 180000 },
+      // Jawaban pertama bisa lambat: model CPU ~786MB diunduh dulu.
+      { timeout: 600000 },
     )
     .catch(() => report.errors.push('timeout menunggu jawaban'))
   const body = await page.locator('body').innerText()
@@ -113,12 +107,6 @@ try {
   if (OFFLINE_TEST) {
     await ctx.setOffline(true)
     await page.reload({ waitUntil: 'domcontentloaded' })
-    await page.waitForTimeout(2500)
-    const gateOff = page.getByText('WebGPU diperlukan untuk LLM lokal')
-    if (await gateOff.count()) {
-      report.notes.push('gate WebGPU tampil lagi saat offline (by design)')
-      await page.getByText('Lanjutkan tanpa LLM').click()
-    }
     await page.waitForSelector('textarea:not([disabled])', { timeout: 60000 })
     const bodyOff = await page.locator('body').innerText()
     report.notes.push(
@@ -145,7 +133,7 @@ try {
   await page.screenshot({ path: '/tmp/lexisai-fatal.png' }).catch(() => {})
 }
 
-await browser.close()
+await ctx.close()
 
 console.log('===== NOTES =====')
 report.notes.forEach((n) => console.log(' •', n))

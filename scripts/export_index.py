@@ -69,6 +69,7 @@ def main() -> None:
                 "id": ids[i],
                 "pasal": str(metas[i].get("pasal", "")),
                 "ayat": metas[i].get("ayat"),
+                "bab": metas[i].get("bab"),
                 "text": docs[i],
             }
             for i in idx
