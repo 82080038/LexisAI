@@ -11,6 +11,8 @@ Fokus utama sistem saat ini adalah melakukan kurasi dan pemetaan **Undang-Undang
 - **Pembersihan Teks Hukum Otomatis (Smart Cleaner):** Mengubah dokumen PDF/OCR mentah dari JDIH menjadi teks bersih tanpa merusak struktur pasal, ayat, dan bab.
 - **Pemotongan Berbasis Makna (Legal Chunking):** Memotong dokumen secara cerdas per pasal utuh agar konteks hukum tidak terputus saat disimpan ke database.
 - **Mesin Pencari Konteks (Semantic Retrieval):** Menemukan pasal dan dasar hukum yang paling relevan berdasarkan makna pertanyaan pengguna, bukan sekadar kesamaan kata kunci.
+- **Graf Rujukan Peraturan:** Relasi antar-pasal dan antar-undang-undang diekstrak sebagai graf sitasi eksplisit — pasal yang saling merujuk otomatis ikut diperkaya ke konteks jawaban (graph-expanded retrieval).
+- **LLM Berjenjang di Browser:** Generasi jawaban otomatis memilih mesin terbaik per perangkat — GPU (WebGPU/WebLLM) → CPU WASM (model ringan via Transformers.js) → mode retrieval-only; tanpa konfigurasi pengguna.
 - **Pemisahan Wewenang APH yang Ketat:** AI dilatih secara khusus untuk membedakan yurisdiksi dan batasan kewenangan antar-lembaga penegak hukum secara presisi guna menghindari tumpang tindih (*overlapping*).
 - **Sitasi Sumber Hukum:** Setiap jawaban disertai rujukan eksplisit ke nomor undang-undang, pasal, dan ayat yang menjadi dasar jawaban.
 
@@ -34,12 +36,12 @@ PDF JDIH ──► Ekstraksi Teks/OCR ──► Smart Cleaner ──► Legal Ch
 ### 2. Pipeline Tanya Jawab (Inference)
 
 ```
-Pertanyaan ──► Embedding Query ──► Semantic Search ──► Re-ranking ──► Prompt + Konteks ──► LLM ──► Jawaban + Sitasi
+Pertanyaan ──► Embedding Query ──► Semantic Search ──► Ekspansi Graf ──► Prompt + Konteks ──► LLM ──► Jawaban + Sitasi
 ```
 
 1. **Query Understanding** — Pertanyaan pengguna dalam bahasa natural (mis. *"Siapa yang berwenang menyidik tindak pidana korupsi?"*) diubah menjadi vektor.
 2. **Semantic Retrieval** — Sistem mencari pasal-pasal paling relevan dari vector database, difilter berdasarkan metadata (mis. jenis tindak pidana, lembaga APH).
-3. **Re-ranking** — Kandidat pasal diurutkan ulang untuk memastikan konteks yang diberikan ke LLM benar-benar yang paling tepat.
+3. **Graph Expansion** — Pasal yang saling merujuk dengan hasil terbaik (via `graph.json`) ditambahkan ke konteks, sehingga norma terkait tidak terlewat.
 4. **Generation** — LLM menerima pertanyaan + potongan pasal sebagai konteks, lalu menyusun jawaban dalam bahasa Indonesia yang lugas dengan sitasi pasal/ayat yang jelas.
 5. **Guardrail** — Jika konteks yang ditemukan tidak cukup menjawab pertanyaan, sistem diinstruksikan untuk mengatakan "tidak ditemukan dasar hukum" daripada mengarang jawaban.
 
@@ -55,7 +57,8 @@ Pertanyaan ──► Embedding Query ──► Semantic Search ──► Re-rank
   - Opsional berbayar: `text-embedding-3-small` (OpenAI)
 - **Database Vector:** `ChromaDB` (lokal, persist di `./chroma_db`) — Pinecone/pgvector direncanakan
 - **Model Bahasa Besar (LLM):**
-  - Default lokal (gratis): **Ollama** `qwen2.5:3b-instruct` via API kompatibel OpenAI (`http://localhost:11434/v1`)
+  - Backend dev (CLI/API): **Ollama** `qwen2.5:3b-instruct` via API kompatibel OpenAI (`http://localhost:11434/v1`)
+  - Web app (di browser user, gratis): GPU → `Qwen2.5-1.5B` via WebLLM/WebGPU; tanpa WebGPU → `Qwen2.5-0.5B` via Transformers.js (ONNX/WASM); keduanya gagal → retrieval-only
   - Opsional berbayar: OpenAI GPT-4o / Claude
 - **Catatan versi:** `openai==1.45.0` wajib dipasangkan dengan `httpx==0.27.2` (versi httpx ≥ 0.28 menyebabkan error `proxies` pada klien OpenAI)
 
@@ -97,7 +100,8 @@ LexisAI/
 ├── frontend/             # PWA React + Vite + Tailwind — RAG 100% di browser user
 │   └── public/data/      # Korpus hasil export (per-UU + manifest sha256)
 ├── scripts/
-│   └── export_index.py   # Export chroma_db → file statis per-UU untuk FE
+│   ├── export_index.py   # Export chroma_db → file statis per-UU untuk FE
+│   └── build_graph.py    # Graf rujukan pasal/UU → frontend/public/data/graph.json
 ├── ingest.py             # Pipeline: extract → clean → chunk → enhance → embed
 ├── main.py               # Tanya jawab RAG (CLI)
 ├── api.py                # REST API FastAPI (opsional, untuk dev/CLI)
@@ -148,8 +152,9 @@ venv/bin/python main.py "Pertanyaan hukum Anda di sini"
 
 **Web App (PWA — tanpa server, semua komputasi di browser user):**
 ```bash
-# 1. Export korpus dari chroma_db ke file statis (sekali / tiap update UU)
+# 1. Export korpus + graf rujukan ke file statis (sekali / tiap update UU)
 venv/bin/python scripts/export_index.py
+venv/bin/python scripts/build_graph.py
 
 # 2. Jalankan frontend (port 5173)
 cd frontend
@@ -158,13 +163,15 @@ npm run dev
 ```
 Buka http://localhost:5173 — PWA: kunjungan pertama mengunduh korpus (~16MB) ke IndexedDB,
 lalu bekerja **offline penuh**. Retrieval via `all-MiniLM-L6-v2` (Transformers.js/ONNX)
-dan generasi via WebLLM (`Qwen2.5-1.5B`, WebGPU) — keduanya berjalan di perangkat user.
+diperluas graf rujukan; generasi otomatis memilih tier terbaik — WebGPU (`Qwen2.5-1.5B`),
+CPU WASM (`Qwen2.5-0.5B`), atau retrieval-only bila keduanya gagal. Tidak ada
+persyaratan WebGPU — aplikasi selalu bisa dipakai.
 
 **Deploy produksi (Rp 0):** `npm run build`, unggah `dist/` ke GitHub Pages/Hostinger.
 Korpus `public/data/` bisa ikut di-deploy, atau dihost di HuggingFace Datasets lalu
 set `VITE_CORPUS_BASE=https://huggingface.co/datasets/<user>/<repo>/resolve/main/data`
-saat build. Update korpus cukup jalankan ulang `export_index.py` — user hanya mengunduh
-file UU yang berubah (delta per sha256).
+saat build. Update korpus: `ingest.py` → `export_index.py` → `build_graph.py` — user
+hanya mengunduh file UU yang berubah (delta per sha256); `graph.json` selalu di-refresh.
 
 **API FastAPI (opsional):** `venv/bin/uvicorn api:app --port 8001` untuk dev/perbandingan.
 
@@ -230,9 +237,11 @@ oleh UU 17/2023) tetap dipertahankan untuk konteks historis/transisi.
 
 ## 🛣️ Roadmap
 
+- [x] Antarmuka web PWA client-side (RAG penuh di browser)
+- [x] Graf rujukan peraturan untuk ekspansi konteks retrieval
 - [ ] Integrasi sumber peraturan non-UU (PP, Permen, SE, Perda)
 - [ ] Deteksi otomatis status perubahan/pencabutan pasal antar-versi UU
-- [ ] Antarmuka web untuk tanya jawab interaktif
+- [ ] Edge graf dari sitasi PERPU/PP/perubahan (sekarang: Pasal + UU Nomor/Tahun)
 - [ ] Ekspor jawaban beserta sitasi ke format dokumen (PDF/DOCX)
 - [ ] Evaluasi akurasi retrieval dengan *benchmark* pertanyaan hukum
 

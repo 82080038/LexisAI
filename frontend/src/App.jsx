@@ -14,7 +14,7 @@ import {
 } from 'lucide-react'
 import { loadCorpus, loadFromCacheOnly, getIndex } from './lib/corpus'
 import { embedQuery } from './lib/embed'
-import { topK } from './lib/search'
+import { topK, expandWithGraph } from './lib/search'
 import { generateAnswer, webgpuAvailable, LLM_MODEL } from './lib/llm'
 import {
   generateAnswerCPU,
@@ -105,6 +105,11 @@ function SourceCard({ source, index }) {
         <span className="min-w-0 flex-1 truncate font-medium text-slate-200">
           {source.citation}
         </span>
+        {source.expanded && (
+          <span className="shrink-0 rounded border border-ink-600 px-1.5 py-0.5 text-[9px] uppercase tracking-wide text-slate-500">
+            rujukan
+          </span>
+        )}
         <ChevronDown
           size={14}
           className={`shrink-0 text-slate-500 transition-transform ${open ? 'rotate-180' : ''}`}
@@ -276,9 +281,9 @@ export default function App() {
         }),
       )
 
-      // 2. Retrieval top-k di memori
+      // 2. Retrieval top-k di memori + perluasan via graf rujukan pasal
       setStatusLine({ icon: 'search', text: 'Menelusuri pasal…' })
-      const sources = topK(idx, qv, 5)
+      const sources = expandWithGraph(idx, topK(idx, qv, 5), 3)
 
       // 3. Generasi — pilih mesin terbaik secara senyap:
       //    GPU (WebLLM) -> CPU/WASM (model ringan) -> retrieval-only

@@ -5,6 +5,11 @@
 
 import { getTjs } from './tjs'
 
+// Bake-off Okt 2026 (tests/bakeoff.mjs): 1B-class tidak layak di WASM —
+// gemma-3-1b-it error onnxruntime (arsitektur tak didukung), Qwen2.5-1.5B
+// q4 OOM 3.6GB & q8 halusinasi parah + 1.6GB unduhan, Llama-3.2-1B q8
+// menghasilkan loop gibberish. Qwen2.5-0.5B satu-satunya yang stabil:
+// 512MB, bahasa Indonesia koheren; grounding & sitasi menutup kelemahannya.
 export const CPU_MODEL = 'onnx-community/Qwen2.5-0.5B-Instruct'
 export const CPU_MODEL_LABEL = 'mode ringan · CPU'
 

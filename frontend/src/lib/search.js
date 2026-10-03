@@ -24,3 +24,33 @@ export function topK(index, queryVec, k = 5) {
     distance: 1 - scores[i],
   }))
 }
+
+/**
+ * Perluas hasil top-k via graf rujukan: pasal yang dirujuk/merujuk ke
+ * hit terbaik ikut masuk konteks (bukan pengganti hasil vektor).
+ * Maks `maxExtra` chunk tambahan, ditandai `expanded: true`.
+ */
+export function expandWithGraph(index, hits, maxExtra = 3) {
+  const graph = index.graph
+  if (!graph?.out || hits.length === 0) return hits
+
+  const seen = new Set(hits.map((h) => h.node))
+  const extra = []
+  for (const h of hits) {
+    if (extra.length >= maxExtra) break
+    for (const tgt of graph.out[h.node] || []) {
+      if (extra.length >= maxExtra) break
+      if (seen.has(tgt)) continue
+      const ci = graph.byNode[tgt]
+      if (ci === undefined) continue // node doc-level (tanpa #pasal) / tidak ada di korpus
+      seen.add(tgt)
+      extra.push({
+        ...index.chunks[ci],
+        score: h.score * 0.85, // diturunkan agar selalu di bawah hit asli
+        distance: 1 - h.score * 0.85,
+        expanded: true,
+      })
+    }
+  }
+  return [...hits, ...extra]
+}

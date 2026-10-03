@@ -55,14 +55,15 @@ try {
       () =>
         document.body.innerText.includes('Dasar hukum') ||
         document.body.innerText.includes('Gagal:'),
-      // Jawaban pertama bisa lambat: model CPU ~786MB diunduh dulu.
-      { timeout: 600000 },
+      // Jawaban pertama bisa lambat: model CPU ~512MB diunduh dulu,
+      // generasi WASM ~0.3-1 tok/s -> 256 token bisa >15 menit headless.
+      { timeout: 1200000 },
     )
     .catch(() => report.errors.push('timeout menunggu jawaban'))
   const body = await page.locator('body').innerText()
   const srcMatch = body.match(/dasar hukum \((\d+)\)/i)
   report.notes.push(`sources: ${srcMatch ? srcMatch[1] : 'TIDAK ADA'}`)
-  const hasLLM = /lokal · \d/.test(body)
+  const hasLLM = /· (GPU|CPU)|lokal · \d/.test(body)
   const hasRetrieval = body.includes('retrieval-only')
   report.notes.push(
     `mode: ${hasLLM ? 'LLM streaming' : hasRetrieval ? 'retrieval-only' : '?'}`,
@@ -76,6 +77,7 @@ try {
 
   // ---- TEST 3: expand sitasi ----
   const card = page.locator('button', { hasText: 'UU No.' }).first()
+  await card.waitFor({ timeout: 30000 }).catch(() => {})
   if (await card.count()) {
     await card.click()
     await page.waitForTimeout(300)

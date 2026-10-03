@@ -8,7 +8,37 @@ import { idbGet, idbSet, idbGetAllKeys, idbDelete } from './db'
 export const CORPUS_BASE =
   import.meta.env.VITE_CORPUS_BASE?.replace(/\/$/, '') || '/data'
 
-let index = null // {vectors: Float32Array (N*dim, L2-normalized), chunks: [...], dim, version}
+let index = null // {vectors: Float32Array (N*dim, L2-normalized), chunks: [...], dim, version, graph}
+
+// graph = {out: {nodeId: [nodeId,...]}, byNode: {nodeId: chunkIdx}} — graf rujukan
+// pasal dari graph.json (opsional; retrieval tetap jalan tanpa graf)
+
+async function fetchGraph() {
+  const res = await fetch(`${CORPUS_BASE}/graph.json`)
+  if (!res.ok) return null // graf opsional — jangan gagalkan boot
+  return res.json()
+}
+
+// nodeId chunk-level: "<doc-key>#<pasal>" — selaras scripts/build_graph.py
+function nodeKey(nomor_uu, tahun_uu, pasal) {
+  return `uu-${nomor_uu}-${tahun_uu}#${pasal}`
+}
+
+// Bangun adjacency + node->idx; simpan graf ke IDB untuk mode offline
+async function attachGraph(chunks, graphJson) {
+  const byNode = {}
+  chunks.forEach((c, i) => {
+    if (!(c.node in byNode)) byNode[c.node] = i // pakai chunk pertama per pasal
+  })
+  if (!graphJson) return { out: {}, byNode }
+  const out = {}
+  for (const e of graphJson.edges || []) {
+    ;(out[e.from] ||= []).push(e.to)
+    // edge dua arah juga berguna: pasal yang MERUJUK ke sini
+    ;(out[e.to] ||= []).push(e.from)
+  }
+  return { out, byNode }
+}
 
 function b64ToInt8(b64) {
   const bin = atob(b64)
@@ -84,6 +114,14 @@ export async function loadCorpus(onProgress = () => {}) {
 
   // Bangun index vektor di memori dari cache (offline-friendly)
   onProgress({ phase: 'build', label: 'Membangun index pencarian…' })
+  // Graf rujukan: fetch terbaru; gagal -> pakai cache IDB -> tanpa graf
+  let graphJson = null
+  try {
+    graphJson = await fetchGraph()
+    if (graphJson) await idbSet('meta', 'graph', graphJson)
+  } catch {
+    graphJson = await idbGet('meta', 'graph')
+  }
   const dim = manifest.dim
   const chunks = []
   const vecs = []
@@ -104,6 +142,7 @@ export async function loadCorpus(onProgress = () => {}) {
         pasal: c.pasal,
         ayat: c.ayat,
         bab: c.bab,
+        node: nodeKey(payload.nomor_uu, payload.tahun_uu, c.pasal),
         text: c.text,
         tentang: payload.tentang,
         nomor_uu: payload.nomor_uu,
@@ -134,7 +173,13 @@ export async function loadCorpus(onProgress = () => {}) {
     off += f32.length
   }
 
-  index = { vectors, chunks, dim, version: manifest.version }
+  index = {
+    vectors,
+    chunks,
+    dim,
+    version: manifest.version,
+    graph: await attachGraph(chunks, graphJson),
+  }
   await idbSet('meta', 'corpus_version', manifest.version)
   onProgress({
     phase: 'ready',
@@ -152,6 +197,7 @@ export function getIndex() {
 /** Hitung ulang index dari cache tanpa jaringan (mode offline penuh). */
 export async function loadFromCacheOnly() {
   const version = await idbGet('meta', 'corpus_version')
+  const graphJson = await idbGet('meta', 'graph')
   const keys = await idbGetAllKeys('docs')
   if (!version || keys.length === 0) return null
   // Bangun ulang tanpa manifest: pakai urutan key tersimpan
@@ -185,6 +231,7 @@ export async function loadFromCacheOnly() {
         pasal: c.pasal,
         ayat: c.ayat,
         bab: c.bab,
+        node: nodeKey(payload.nomor_uu, payload.tahun_uu, c.pasal),
         text: c.text,
         tentang: payload.tentang,
         nomor_uu: payload.nomor_uu,
@@ -200,6 +247,12 @@ export async function loadFromCacheOnly() {
     vectors.set(f32, off)
     off += f32.length
   }
-  index = { vectors, chunks, dim, version }
+  index = {
+    vectors,
+    chunks,
+    dim,
+    version,
+    graph: await attachGraph(chunks, graphJson),
+  }
   return index
 }
