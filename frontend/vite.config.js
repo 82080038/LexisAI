@@ -50,10 +50,6 @@ export default defineConfig({
       },
     }),
   ],
-  optimizeDeps: {
-    // transformers.js memuat WASM/ONNX sendiri — jangan di-prebundle esbuild
-    exclude: ['@xenova/transformers'],
-  },
   server: {
     port: 5173,
   },

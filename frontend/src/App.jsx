@@ -15,7 +15,7 @@ import {
 import { loadCorpus, loadFromCacheOnly, getIndex } from './lib/corpus'
 import { embedQuery } from './lib/embed'
 import { topK } from './lib/search'
-import { generateAnswer, webgpuSupported, LLM_MODEL } from './lib/llm'
+import { generateAnswer, webgpuAvailable, LLM_MODEL } from './lib/llm'
 import ReloadPrompt from './ReloadPrompt'
 
 const SUGGESTIONS = [
@@ -192,7 +192,8 @@ export default function App() {
   const [boot, setBoot] = useState({ phase: 'init', label: 'Menyiapkan…', pct: 0 })
   const [corpusInfo, setCorpusInfo] = useState(null) // {chunks, version}
   const [offline, setOffline] = useState(false)
-  const [hasWebGPU] = useState(() => webgpuSupported())
+  // null = belum dicek; true/false = hasil requestAdapter()
+  const [hasWebGPU, setHasWebGPU] = useState(null)
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
@@ -203,6 +204,7 @@ export default function App() {
 
   useEffect(() => {
     navigator.storage?.persist?.().catch(() => {})
+    webgpuAvailable().then(setHasWebGPU)
 
     loadCorpus((p) => {
       setBoot({
@@ -239,10 +241,9 @@ export default function App() {
     return sources.map((s) => `[${s.citation}]\n${s.text}`).join('\n\n---\n\n')
   }
 
-  function buildRetrievalOnlyAnswer(sources) {
+  function buildRetrievalOnlyAnswer(sources, reason) {
     return (
-      'Browser ini tidak mendukung WebGPU, jadi jawaban tidak dapat dirangkum oleh ' +
-      'LLM lokal. Berikut pasal paling relevan (lihat kartu Dasar hukum di bawah):\n\n' +
+      `${reason} Berikut pasal paling relevan (lihat kartu Dasar hukum di bawah):\n\n` +
       sources.map((s, i) => `${i + 1}. **${s.citation}**`).join('\n')
     )
   }
@@ -269,68 +270,89 @@ export default function App() {
       setStatusLine({ icon: 'search', text: 'Menelusuri pasal…' })
       const sources = topK(idx, qv, 5)
 
-      // 3. Generasi jawaban
-      if (!hasWebGPU) {
-        setMessages((m) => [
-          ...m,
-          {
-            role: 'assistant',
-            content: buildRetrievalOnlyAnswer(sources),
-            sources,
-            meta: 'retrieval-only · tanpa WebGPU',
-          },
-        ])
-        return
+      // 3. Generasi jawaban — fallback ke retrieval-only bila LLM
+      //    gagal apa pun sebabnya (tanpa WebGPU, adapter, OOM, dll)
+      let llmErr = null
+      if (hasWebGPU === true) {
+        streamingIdx.current = -1
+        let first = true
+        const t0 = performance.now()
+        try {
+          const final = await generateAnswer(
+            q,
+            buildContext(sources),
+            (p) =>
+              setStatusLine({
+                icon: 'llm',
+                text: p.text?.startsWith('Loading')
+                  ? 'Unduh bobot LLM…'
+                  : `Menyiapkan LLM… ${p.text || ''}`,
+                pct: p.progress,
+              }),
+            (acc) => {
+              if (first) {
+                first = false
+                setStatusLine(null)
+                setMessages((m) => {
+                  streamingIdx.current = m.length
+                  return [...m, { role: 'assistant', content: acc, sources }]
+                })
+              } else {
+                setMessages((m) => {
+                  const copy = [...m]
+                  copy[streamingIdx.current] = {
+                    ...copy[streamingIdx.current],
+                    content: acc,
+                  }
+                  return copy
+                })
+              }
+            },
+          )
+          const ms = Math.round(performance.now() - t0)
+          setMessages((m) => {
+            const copy = [...m]
+            copy[streamingIdx.current] = {
+              ...copy[streamingIdx.current],
+              content: final,
+              meta: `${LLM_MODEL} · lokal · ${ms.toLocaleString('id-ID')} ms`,
+            }
+            return copy
+          })
+          return
+        } catch (e) {
+          llmErr = e?.message ?? String(e)
+          // hapus gelembung streaming setengah jadi (bila ada)
+          if (streamingIdx.current >= 0) {
+            setMessages((m) => m.filter((_, i) => i !== streamingIdx.current))
+            streamingIdx.current = -1
+          }
+        }
       }
 
-      streamingIdx.current = -1
-      let first = true
-      const t0 = performance.now()
-      const final = await generateAnswer(
-        q,
-        buildContext(sources),
-        (p) =>
-          setStatusLine({
-            icon: 'llm',
-            text: p.text?.startsWith('Loading')
-              ? 'Unduh bobot LLM…'
-              : `Menyiapkan LLM… ${p.text || ''}`,
-            pct: p.progress,
-          }),
-        (acc) => {
-          if (first) {
-            first = false
-            setStatusLine(null)
-            setMessages((m) => {
-              streamingIdx.current = m.length
-              return [...m, { role: 'assistant', content: acc, sources }]
-            })
-          } else {
-            setMessages((m) => {
-              const copy = [...m]
-              copy[streamingIdx.current] = {
-                ...copy[streamingIdx.current],
-                content: acc,
-              }
-              return copy
-            })
-          }
+      const reason =
+        llmErr != null
+          ? `LLM lokal gagal dimuat (${llmErr}).`
+          : hasWebGPU === null
+            ? 'Browser ini tidak mendukung WebGPU, jadi jawaban tidak dapat dirangkum LLM lokal.'
+            : 'WebGPU tidak tersedia di browser ini, jadi jawaban tidak dapat dirangkum LLM lokal.'
+      setMessages((m) => [
+        ...m,
+        {
+          role: 'assistant',
+          content: buildRetrievalOnlyAnswer(sources, reason),
+          sources,
+          meta: 'retrieval-only',
         },
-      )
-      const ms = Math.round(performance.now() - t0)
-      setMessages((m) => {
-        const copy = [...m]
-        copy[streamingIdx.current] = {
-          ...copy[streamingIdx.current],
-          content: final,
-          meta: `${LLM_MODEL} · lokal · ${ms.toLocaleString('id-ID')} ms`,
-        }
-        return copy
-      })
+      ])
     } catch (e) {
       setMessages((m) => [
         ...m,
-        { role: 'assistant', content: `Gagal: ${e.message}`, error: true },
+        {
+          role: 'assistant',
+          content: `Gagal: ${e?.message ?? String(e)}`,
+          error: true,
+        },
       ])
     } finally {
       setStatusLine(null)
@@ -362,7 +384,7 @@ export default function App() {
               LexisAI
             </h1>
             <p className="text-[11px] text-slate-500">
-              Asisten Hukum Indonesia berbasis RAG
+              Asisten Hukum Indonesia · 100% di perangkat Anda
             </p>
           </div>
         </div>
@@ -378,9 +400,9 @@ export default function App() {
               {corpusInfo.chunks.toLocaleString('id-ID')} pasal
             </div>
           )}
-          {!hasWebGPU && (
+          {hasWebGPU === false && (
             <span className="flex items-center gap-1.5 rounded-full bg-ink-800 px-2.5 py-1 text-[11px] font-medium text-slate-400 ring-1 ring-ink-700">
-              <Cpu size={11} /> tanpa WebGPU
+              <Cpu size={11} /> LLM tak tersedia
             </span>
           )}
         </div>

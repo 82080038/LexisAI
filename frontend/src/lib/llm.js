@@ -7,8 +7,24 @@ export const LLM_MODEL = 'Qwen2.5-1.5B-Instruct-q4f16_1-MLC'
 let worker = null
 let enginePromise = null
 
-export function webgpuSupported() {
-  return typeof navigator !== 'undefined' && 'gpu' in navigator
+let gpuChecked = null
+
+/**
+ * Cek WebGPU benar-benar bisa dipakai (adapter ada), bukan sekadar API ada.
+ * 'gpu' in navigator saja menipu: headless/browser tanpa GPU tetap true.
+ */
+export async function webgpuAvailable() {
+  if (gpuChecked === null) {
+    try {
+      gpuChecked =
+        typeof navigator !== 'undefined' &&
+        'gpu' in navigator &&
+        !!(await navigator.gpu.requestAdapter())
+    } catch {
+      gpuChecked = false
+    }
+  }
+  return gpuChecked
 }
 
 async function getEngine(onProgress) {
@@ -34,7 +50,7 @@ async function getEngine(onProgress) {
 
 /** Pemuatan model lebih awal (opsional, mis. setelah corpus siap). */
 export async function preloadLLM(onProgress) {
-  if (!webgpuSupported()) return null
+  if (!(await webgpuAvailable())) return null
   return getEngine(onProgress)
 }
 

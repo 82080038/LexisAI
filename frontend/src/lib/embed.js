@@ -1,13 +1,16 @@
 // Embedding query di browser — model & hasil setara ingestion
 // (all-MiniLM-L6-v2, mean-pooling + normalisasi), via ONNX WASM.
 
-// Lazy import: transformers.js (ONNX runtime) hanya diunduh saat
-// query pertama — tidak membebani bundle awal.
+// Lazy import dari CDN jsDelivr — versi terpin, lolos dari bundling Vite
+// (menghindari bug 'registerBackend' onnxruntime di optimizeDeps).
+const TRANSFORMERS_URL =
+  'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2'
+
 let embedderPromise = null
 
 export function getEmbedder(onProgress) {
   if (!embedderPromise) {
-    embedderPromise = import('@xenova/transformers').then(
+    embedderPromise = import(/* @vite-ignore */ TRANSFORMERS_URL).then(
       ({ pipeline, env }) => {
         // Model diunduh sekali dari CDN HuggingFace lalu di-cache browser.
         env.allowLocalModels = false
