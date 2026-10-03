@@ -28,6 +28,16 @@ try {
   // ---- TEST 1: boot & corpus ----
   await page.goto(URL, { waitUntil: 'domcontentloaded' })
   report.notes.push('goto OK')
+  // Bila WebGPU tak ada -> app berhenti di gate persyaratan (by design).
+  // Lanjutkan mode terbatas untuk tetap menguji jalur retrieval.
+  await page.waitForTimeout(2500)
+  const gate = page.getByText('WebGPU diperlukan untuk LLM lokal')
+  if (await gate.count()) {
+    report.notes.push('gate WebGPU tampil (by design)')
+    await page.screenshot({ path: '/tmp/lexisai-gate.png' })
+    await page.getByText('Lanjutkan tanpa LLM').click()
+    report.notes.push('klik lanjut mode terbatas')
+  }
   await page.waitForSelector('textarea:not([disabled])', { timeout: 120000 })
   report.notes.push('boot ready: textarea enabled')
   const badge = await page.locator('header').innerText()
@@ -103,6 +113,12 @@ try {
   if (OFFLINE_TEST) {
     await ctx.setOffline(true)
     await page.reload({ waitUntil: 'domcontentloaded' })
+    await page.waitForTimeout(2500)
+    const gateOff = page.getByText('WebGPU diperlukan untuk LLM lokal')
+    if (await gateOff.count()) {
+      report.notes.push('gate WebGPU tampil lagi saat offline (by design)')
+      await page.getByText('Lanjutkan tanpa LLM').click()
+    }
     await page.waitForSelector('textarea:not([disabled])', { timeout: 60000 })
     const bodyOff = await page.locator('body').innerText()
     report.notes.push(

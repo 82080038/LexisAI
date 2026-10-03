@@ -202,10 +202,8 @@ export default function App() {
   const taRef = useRef(null)
   const streamingIdx = useRef(-1)
 
-  useEffect(() => {
-    navigator.storage?.persist?.().catch(() => {})
-    webgpuAvailable().then(setHasWebGPU)
-
+  const startCorpus = () => {
+    setBoot({ phase: 'manifest', label: 'Memeriksa versi korpus…', pct: 0 })
     loadCorpus((p) => {
       setBoot({
         phase: p.phase,
@@ -231,6 +229,18 @@ export default function App() {
           })
         }
       })
+  }
+
+  useEffect(() => {
+    navigator.storage?.persist?.().catch(() => {})
+    // Cek persyaratan DULU — bila WebGPU tak ada, app berhenti di gate
+    // (bukan diam-diam berjalan dalam mode terdegradasi).
+    webgpuAvailable().then((ok) => {
+      setHasWebGPU(ok)
+      if (ok) startCorpus()
+      else setBoot({ phase: 'gate' })
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   useEffect(() => {
@@ -410,7 +420,54 @@ export default function App() {
 
       {/* area chat */}
       <main className="scroll-thin flex-1 space-y-5 overflow-y-auto px-5 py-6">
-        {!ready ? (
+        {boot.phase === 'gate' ? (
+          <div className="flex h-full flex-col items-center justify-center gap-6 pb-10 text-center">
+            <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-amber-500/15 ring-1 ring-amber-500/40">
+              <Cpu size={30} className="text-amber-400" />
+            </div>
+            <div className="max-w-lg">
+              <h2 className="font-serif text-xl font-bold text-slate-100">
+                WebGPU diperlukan untuk LLM lokal
+              </h2>
+              <p className="mx-auto mt-2 text-sm leading-relaxed text-slate-400">
+                LexisAI menjalankan model bahasa langsung di GPU Anda — ini
+                tidak dapat diaktifkan oleh aplikasi; ia harus didukung
+                browser + GPU + driver Anda.
+              </p>
+              <ul className="mx-auto mt-4 max-w-md space-y-2 text-left text-[13px] text-slate-300">
+                <li className="flex gap-2">
+                  <span className="text-gold-400">1.</span>
+                  Gunakan <strong>Chrome / Edge / Brave terbaru</strong> di
+                  komputer dengan GPU (Firefox &amp; Safari belum mendukung).
+                </li>
+                <li className="flex gap-2">
+                  <span className="text-gold-400">2.</span>
+                  Pastikan akselerasi hardware aktif dan driver GPU
+                  diperbarui — cek <code className="rounded bg-ink-800 px-1.5 py-0.5 font-mono text-gold-400">chrome://gpu</code> (cari status <em>WebGPU: Hardware accelerated</em>).
+                </li>
+                <li className="flex gap-2">
+                  <span className="text-gold-400">3.</span>
+                  Di VM/WSL/headless: WebGPU umumnya tidak tersedia — jalankan
+                  di mesin fisik dengan GPU.
+                </li>
+              </ul>
+            </div>
+            <div className="flex flex-col items-center gap-3">
+              <button
+                onClick={() => window.location.reload()}
+                className="rounded-xl bg-gold-500 px-5 py-2.5 text-sm font-semibold text-ink-950 shadow-lg shadow-gold-500/20 hover:bg-gold-400"
+              >
+                Cek ulang
+              </button>
+              <button
+                onClick={startCorpus}
+                className="text-xs text-slate-500 underline underline-offset-4 hover:text-slate-300"
+              >
+                Lanjutkan tanpa LLM — hanya pencarian pasal (mode terbatas)
+              </button>
+            </div>
+          </div>
+        ) : !ready ? (
           <div className="flex h-full flex-col items-center justify-center gap-6 pb-10 text-center">
             <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-gold-400 to-gold-500 shadow-2xl shadow-gold-500/20">
               {boot.phase === 'error' ? (
