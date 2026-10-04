@@ -4,6 +4,8 @@ python-dotenv==1.0.1
 # PDF Processing & OCR
 pdfplumber==0.11.4
 pypdf==4.3.1
+# Catatan: koreksi OCR di src/ocr_fix.py butuh paket SISTEM (bukan pip):
+#   apt install hunspell hunspell-id   # kamus id_ID; nonaktif otomatis bila absen
 
 # AI Framework & LLM
 langchain==0.3.0

@@ -9,6 +9,7 @@ Fokus utama sistem saat ini adalah melakukan kurasi dan pemetaan **Undang-Undang
 ## 🚀 Fitur Utama
 
 - **Pembersihan Teks Hukum Otomatis (Smart Cleaner):** Mengubah dokumen PDF/OCR mentah dari JDIH menjadi teks bersih tanpa merusak struktur pasal, ayat, dan bab.
+- **Koreksi OCR Berbasis Kamus (`ocr_fix`):** Memperbaiki token salah-OCR per kata — kata terbalik hasil scan mirror, huruf/digit tertukar (`rn→m`, `€→e`, `q→u`), token ganda tanpa spasi, dan huruf terpisah — tervalidasi kamus Hunspell `id_ID` plus whitelist ~190 istilah hukum & akronim lembaga agar tidak over-koreksi.
 - **Pemotongan Berbasis Makna (Legal Chunking):** Memotong dokumen secara cerdas per pasal utuh agar konteks hukum tidak terputus saat disimpan ke database.
 - **Mesin Pencari Konteks (Semantic Retrieval):** Menemukan pasal dan dasar hukum yang paling relevan berdasarkan makna pertanyaan pengguna, bukan sekadar kesamaan kata kunci.
 - **Graf Rujukan Peraturan:** Relasi antar-pasal dan antar-undang-undang diekstrak sebagai graf sitasi eksplisit — pasal yang saling merujuk otomatis ikut diperkaya ke konteks jawaban (graph-expanded retrieval).
@@ -51,6 +52,7 @@ Pertanyaan ──► Embedding Query ──► Semantic Search ──► Ekspans
 
 - **Bahasa Pemrograman:** Python 3.10+ (dikembangkan pada venv Python 3.12)
 - **Ekstraksi PDF:** `pdfplumber` (+ fallback `pypdf`); OCR opsional via Tesseract
+- **Koreksi eja OCR:** paket sistem `hunspell` + kamus `id_ID` (`apt install hunspell hunspell-id` atau salin `id_ID.{dic,aff}` ke `/usr/share/hunspell/`) — dipanggil sebagai subprocess, otomatis nonaktif bila tidak terpasang
 - **Kerangka Kerja AI:** `LangChain`, `langchain-community`, `langchain-openai`
 - **Model Embedding:**
   - Default lokal (gratis): `all-MiniLM-L6-v2` bawaan ChromaDB (ONNX)

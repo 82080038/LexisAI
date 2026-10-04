@@ -34,3 +34,10 @@ venv/bin/python scripts/build_graph.py    # graf rujukan -> frontend/public/data
   lokal Chroma `all-MiniLM-L6-v2` saat tanpa OpenAI key).
 - Koleksi Chroma perlu di-reset bila skema chunk-ID/metadata berubah,
   agar tidak terjadi duplikasi vektor.
+- `src/ocr_fix.py` butuh paket sistem `hunspell` + kamus `id_ID`
+  (`apt install hunspell hunspell-id`); tanpa itu fixer nonaktif otomatis.
+- JEBAKAN hunspell: output `-a` utk kata BENAR adalah `*` telanjang
+  (tanpa nama kata) — tidak bisa dipetakan ke input; pakai `-l` untuk
+  cek eja (echo kata salah) dan `-a` hanya utk saran kata yang sudah
+  terbukti salah. Perubahan teks korpus → WAJIB re-ingest (embedding
+  disimpan bersama teks, tidak bisa di-patch pasca-upsert).
