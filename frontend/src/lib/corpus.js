@@ -2,11 +2,14 @@
 // simpan di IndexedDB, bangun index vektor di memori.
 
 import { idbGet, idbSet, idbGetAllKeys, idbDelete } from './db'
+import { SUPERSEDED } from './lexicon'
 
-// Basis URL korpus: default file statis di app; produksi bisa arahkan ke
-// HuggingFace Datasets (mis. https://huggingface.co/datasets/<user>/<repo>/resolve/main/)
+// Basis URL korpus: default file statis relatif ke base app (subpath-safe
+// untuk deploy GitHub Pages /LexisAI/); produksi bisa arahkan ke
+// HuggingFace Datasets via VITE_CORPUS_BASE.
 export const CORPUS_BASE =
-  import.meta.env.VITE_CORPUS_BASE?.replace(/\/$/, '') || '/data'
+  import.meta.env.VITE_CORPUS_BASE?.replace(/\/$/, '') ||
+  `${import.meta.env.BASE_URL.replace(/\/$/, '')}/data`
 
 let index = null // {vectors: Float32Array (N*dim, L2-normalized), chunks: [...], dim, version, graph}
 
@@ -16,6 +19,14 @@ let index = null // {vectors: Float32Array (N*dim, L2-normalized), chunks: [...]
 async function fetchGraph() {
   const res = await fetch(`${CORPUS_BASE}/graph.json`)
   if (!res.ok) return null // graf opsional — jangan gagalkan boot
+  return res.json()
+}
+
+// Penjelasan bahasa awam per pasal (dibangun SEKALI di build-time via
+// scripts/gen_penjelasan.py — pola CanLII). Opsional: file boleh absen.
+async function fetchPenjelasan() {
+  const res = await fetch(`${CORPUS_BASE}/penjelasan.json`)
+  if (!res.ok) throw new Error(`penjelasan ${res.status}`)
   return res.json()
 }
 
@@ -29,6 +40,10 @@ async function attachGraph(chunks, graphJson) {
   const byNode = {}
   chunks.forEach((c, i) => {
     if (!(c.node in byNode)) byNode[c.node] = i // pakai chunk pertama per pasal
+    // Node doc-level (edge lintas tanpa target pasal, mis. 'uu-10-1998')
+    // diarahkan ke chunk pertama dokumen — bukan dead end lagi.
+    const docKey = c.node.split('#')[0]
+    if (!(docKey in byNode)) byNode[docKey] = i
   })
   if (!graphJson) return { out: {}, byNode }
   const out = {}
@@ -126,6 +141,14 @@ export async function loadCorpus(onProgress = () => {}) {
   const chunks = []
   const vecs = []
   let n = 0
+  // Penjelasan pasal: fetch terbaru; gagal -> cache IDB -> tanpa inti
+  let penjelasan = null
+  try {
+    penjelasan = await fetchPenjelasan()
+    if (penjelasan) await idbSet('meta', 'penjelasan', penjelasan)
+  } catch {
+    penjelasan = await idbGet('meta', 'penjelasan')
+  }
   for (const doc of manifest.docs) {
     const cached = await idbGet('docs', doc.key)
     if (!cached) throw new Error(`${doc.key} hilang dari cache`)
@@ -137,16 +160,21 @@ export async function loadCorpus(onProgress = () => {}) {
         (c.bab ? `, ${c.bab}` : '') +
         `, Pasal ${c.pasal}` +
         (c.ayat ? ` ayat (${c.ayat})` : '')
+      const node = nodeKey(payload.nomor_uu, payload.tahun_uu, c.pasal)
       chunks.push({
         citation,
         pasal: c.pasal,
         ayat: c.ayat,
         bab: c.bab,
-        node: nodeKey(payload.nomor_uu, payload.tahun_uu, c.pasal),
-        text: c.text,
+        node,
+        // line-break PDF dinormalisasi: fragmen baris merusak ekstraksi kalimat
+        text: c.text.replace(/\s+/g, ' ').trim(),
+        inti: penjelasan?.[node] || null,
         tentang: payload.tentang,
         nomor_uu: payload.nomor_uu,
         tahun_uu: payload.tahun_uu,
+        // bila dokumen dicabut: label penggantinya untuk badge/demote
+        superseded: SUPERSEDED[`${payload.nomor_uu}-${payload.tahun_uu}`] || null,
       })
     }
     // dequantize + normalisasi L2 per baris
@@ -200,8 +228,10 @@ export async function loadFromCacheOnly() {
   const graphJson = await idbGet('meta', 'graph')
   const keys = await idbGetAllKeys('docs')
   if (!version || keys.length === 0) return null
-  // Bangun ulang tanpa manifest: pakai urutan key tersimpan
-  const dim = 384
+  // Bangun ulang tanpa manifest: pakai urutan key tersimpan.
+  // dim diambil dari meta yang ditulis loadCorpus; 384 = fallback cache lama.
+  const dim = (await idbGet('meta', 'corpus_dim')) || 384
+  const penjelasan = await idbGet('meta', 'penjelasan')
   const chunks = []
   const vecs = []
   let n = 0
@@ -223,6 +253,7 @@ export async function loadFromCacheOnly() {
       for (let j = 0; j < dim; j++) f32[base + j] /= norm
     }
     for (const c of payload.chunks) {
+      const node = nodeKey(payload.nomor_uu, payload.tahun_uu, c.pasal)
       chunks.push({
         citation: `UU No. ${payload.nomor_uu} Tahun ${payload.tahun_uu}` +
           (c.bab ? `, ${c.bab}` : '') +
@@ -231,11 +262,13 @@ export async function loadFromCacheOnly() {
         pasal: c.pasal,
         ayat: c.ayat,
         bab: c.bab,
-        node: nodeKey(payload.nomor_uu, payload.tahun_uu, c.pasal),
-        text: c.text,
+        node,
+        text: c.text.replace(/\s+/g, ' ').trim(),
+        inti: penjelasan?.[node] || null,
         tentang: payload.tentang,
         nomor_uu: payload.nomor_uu,
         tahun_uu: payload.tahun_uu,
+        superseded: SUPERSEDED[`${payload.nomor_uu}-${payload.tahun_uu}`] || null,
       })
     }
     vecs.push(f32)

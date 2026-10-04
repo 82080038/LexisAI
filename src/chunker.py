@@ -53,7 +53,7 @@ class LegalChunkingAgent:
     ) -> list[LegalChunk]:
         """Potong teks bersih menjadi chunk per pasal (atau per ayat jika >800 kata)."""
         if self.use_llm:
-            return self._chunk_with_llm(clean_text)
+            return self._chunk_with_llm(clean_text, nomor_uu, tahun_uu, tentang)
         return self._chunk_by_regex(clean_text, nomor_uu, tahun_uu, tentang)
 
     def _chunk_by_regex(
@@ -150,7 +150,9 @@ class LegalChunkingAgent:
             )
         return chunks
 
-    def _chunk_with_llm(self, text: str) -> list[LegalChunk]:
+    def _chunk_with_llm(
+        self, text: str, nomor_uu: str, tahun_uu: str, tentang: str
+    ) -> list[LegalChunk]:
         """Pemotongan via LLM; parse output ===CHUNK_BOUNDARY=== + header metadata."""
         response = self.client.chat.completions.create(
             model=get_llm_model(),
@@ -164,6 +166,9 @@ class LegalChunkingAgent:
         )
         raw = response.choices[0].message.content
 
+        # Metadata dokumen dari nama file selalu disematkan — output LLM hanya
+        # menambah 'sumber'/'struktur'/'pasal', tidak boleh menimpa nomor/tahun.
+        doc_meta = {"nomor_uu": nomor_uu, "tahun_uu": tahun_uu, "tentang": tentang}
         chunks = []
         for block in raw.split(CHUNK_BOUNDARY):
             block = block.strip()
@@ -171,7 +176,11 @@ class LegalChunkingAgent:
                 continue
             meta, body = self._parse_metadata_header(block)
             chunks.append(
-                LegalChunk(text=body, pasal=meta.get("pasal", ""), metadata=meta)
+                LegalChunk(
+                    text=body,
+                    pasal=meta.get("pasal", ""),
+                    metadata={**doc_meta, **meta},
+                )
             )
         return chunks
 

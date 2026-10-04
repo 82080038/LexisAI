@@ -8,6 +8,9 @@
 # Vector DB lokal
 /chroma_db/
 
+# Artefak perantara: shard generasi penjelasan (yang dideploy = penjelasan.json)
+frontend/public/data/penjelasan.s*.json
+
 # Python
 __pycache__/
 *.py[cod]

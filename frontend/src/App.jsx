@@ -13,9 +13,10 @@ import {
   WifiOff,
 } from 'lucide-react'
 import { loadCorpus, loadFromCacheOnly, getIndex } from './lib/corpus'
-import { embedQuery } from './lib/embed'
+import { embedQuery, embedBatch } from './lib/embed'
+import { splitSentences, rankSentences } from './lib/sentences'
 import { topK, expandWithGraph } from './lib/search'
-import { generateAnswer, webgpuAvailable, LLM_MODEL } from './lib/llm'
+import { generateAnswer, preloadLLM, webgpuAvailable, LLM_MODEL } from './lib/llm'
 import {
   generateAnswerCPU,
   CPU_MODEL_LABEL,
@@ -24,7 +25,7 @@ import ReloadPrompt from './ReloadPrompt'
 
 const SUGGESTIONS = [
   'Apa sanksi pidana korupsi menurut UU Tipikor?',
-  'Bagaimana syarat perkawinan menurut UU No. 1 Tahun 1974?',
+  'Kapan penyidik boleh menahan tersangka menurut KUHAP?',
   'Apa itu asas ultimum remedium dalam hukum pajak?',
   'Hak konsumen apa saja yang diatur UU Perlindungan Konsumen?',
 ]
@@ -105,6 +106,14 @@ function SourceCard({ source, index }) {
         <span className="min-w-0 flex-1 truncate font-medium text-slate-200">
           {source.citation}
         </span>
+        {source.superseded && (
+          <span
+            title={`Dicabut dan digantikan oleh ${source.superseded}`}
+            className="shrink-0 rounded border border-red-500/40 bg-red-500/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-red-300"
+          >
+            dicabut
+          </span>
+        )}
         {source.expanded && (
           <span className="shrink-0 rounded border border-ink-600 px-1.5 py-0.5 text-[9px] uppercase tracking-wide text-slate-500">
             rujukan
@@ -115,6 +124,19 @@ function SourceCard({ source, index }) {
           className={`shrink-0 text-slate-500 transition-transform ${open ? 'rotate-180' : ''}`}
         />
       </button>
+      {/* Inti pasal (precomputed build-time) atau kutipan verbatim
+          paling relevan — terlihat tanpa membuka kartu. */}
+      {source.inti ? (
+        <p className="border-t border-ink-700/60 px-3 py-2 font-serif leading-relaxed text-gold-200/90">
+          {source.inti}
+        </p>
+      ) : (
+        source.kutipan && (
+          <p className="border-t border-ink-700/60 px-3 py-2 font-serif italic leading-relaxed text-slate-400">
+            “{source.kutipan}”
+          </p>
+        )
+      )}
       {open && (
         <div className="border-t border-ink-700 px-3 py-2">
           {source.tentang && (
@@ -207,9 +229,29 @@ export default function App() {
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [statusLine, setStatusLine] = useState(null) // status proses per-tanyaan
+  // Susun jawaban AI (LLM generatif) — opt-in: bawaan aktif hanya untuk
+  // WebGPU; di perangkat lain tetap tersedia manual (unduh ~512MB).
+  const [aiMode, setAiMode] = useState(null)
   const bottomRef = useRef(null)
   const taRef = useRef(null)
   const streamingIdx = useRef(-1)
+
+  // Debug handle untuk smoke test lokal — tidak aktif di origin non-localhost
+  useEffect(() => {
+    if (!/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) return
+    window.__lexis = {
+      getIndex,
+      embedQuery,
+      embedBatch,
+      splitSentences,
+      rankSentences,
+      topK,
+      expandWithGraph,
+    }
+    return () => {
+      delete window.__lexis
+    }
+  }, [])
 
   const startCorpus = () => {
     setBoot({ phase: 'manifest', label: 'Memeriksa versi korpus…', pct: 0 })
@@ -243,7 +285,11 @@ export default function App() {
   useEffect(() => {
     navigator.storage?.persist?.().catch(() => {})
     // Cek GPU di latar — tier LLM dipilih senyap saat bertanya.
-    webgpuAvailable().then(setHasWebGPU)
+    webgpuAvailable().then((ok) => {
+      setHasWebGPU(ok)
+      // Preload bobot LLM (~1GB) di background agar tanya pertama langsung cepat.
+      if (ok) preloadLLM().catch(() => {})
+    })
     startCorpus()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -257,8 +303,17 @@ export default function App() {
   }
 
   function buildRetrievalOnlyAnswer(sources, reason) {
+    // Anti-halusinasi: bila tidak ada bukti leksikal sama sekali dan
+    // skor dense rendah, katakan jujur — jangan klaim sitasi lemah.
+    const top = sources[0]
+    const uncertain = top && (top.lexScore ?? 0) === 0 && top.score < 0.62
+    const caveat = uncertain
+      ? 'Kemungkinan hal ini **tidak diatur secara spesifik** dalam korpus ' +
+        'yang tersedia — berikut pasal terdekat secara makna.\n\n'
+      : ''
     return (
-      `${reason} Berikut pasal paling relevan (lihat kartu Dasar hukum di bawah):\n\n` +
+      `${reason} ${caveat}Berikut pasal paling relevan ` +
+      `(lihat kartu Dasar hukum di bawah):\n\n` +
       sources.map((s, i) => `${i + 1}. **${s.citation}**`).join('\n')
     )
   }
@@ -281,14 +336,37 @@ export default function App() {
         }),
       )
 
-      // 2. Retrieval top-k di memori + perluasan via graf rujukan pasal
+      // 2. Retrieval top-k hybrid (dense + boost rujukan) + graf rujukan
       setStatusLine({ icon: 'search', text: 'Menelusuri pasal…' })
-      const sources = expandWithGraph(idx, topK(idx, qv, 5), 3)
+      const sources = expandWithGraph(idx, topK(idx, qv, 5, q), 3)
 
-      // 3. Generasi — pilih mesin terbaik secara senyap:
-      //    GPU (WebLLM) -> CPU/WASM (model ringan) -> retrieval-only
+      // 2b. Kutipan verbatim paling relevan per sumber (strict quote-only) —
+      //     non-fatal bila embed gagal; inti precomputed tetap tampil.
+      try {
+        const perSrc = sources
+          .slice(0, 3)
+          .map((s) => splitSentences(s.text).filter((x) => x.length <= 800))
+        const unitsAll = perSrc.flat()
+        if (unitsAll.length) {
+          const vecs = await embedBatch(unitsAll)
+          let off = 0
+          sources.slice(0, 3).forEach((s, i) => {
+            const units = perSrc[i]
+            const best = rankSentences(units, vecs.slice(off, off + units.length), qv, 1)[0]
+            if (best) s.kutipan = best.s
+            off += units.length
+          })
+        }
+      } catch {
+        /* kutipan opsional */
+      }
+
+      // 3. Generasi — opt-in: GPU (WebLLM) -> CPU/WASM (model ringan)
+      //    -> retrieval-only. Mati = langsung kartu pasal tanpa unduh LLM.
+      const aiEnabled = aiMode ?? hasWebGPU === true
       let llmErr = null
       try {
+        if (!aiEnabled) throw new Error('ai-off')
         const useGPU = hasWebGPU === true
         const gen = useGPU ? generateAnswer : generateAnswerCPU
         const label = useGPU ? `${LLM_MODEL} · GPU` : CPU_MODEL_LABEL
@@ -328,11 +406,17 @@ export default function App() {
         )
         const ms = Math.round(performance.now() - t0)
         setMessages((m) => {
+          const meta = `${label} · lokal · ${ms.toLocaleString('id-ID')} ms`
+          // Stream tanpa satu pun token (acc='') -> streamingIdx masih -1:
+          // push pesan baru alih-alih menulis ke index -1 yang tidak dirender.
+          if (streamingIdx.current < 0) {
+            return [...m, { role: 'assistant', content: final, sources, meta }]
+          }
           const copy = [...m]
           copy[streamingIdx.current] = {
             ...copy[streamingIdx.current],
             content: final,
-            meta: `${label} · lokal · ${ms.toLocaleString('id-ID')} ms`,
+            meta,
           }
           return copy
         })
@@ -351,7 +435,9 @@ export default function App() {
           role: 'assistant',
           content: buildRetrievalOnlyAnswer(
             sources,
-            `Model bahasa tidak dapat dimuat di perangkat ini (${llmErr}).`,
+            llmErr === 'ai-off'
+              ? 'Mode susun jawaban AI nonaktif — berikut pasal paling relevan.'
+              : `Model bahasa tidak dapat dimuat di perangkat ini (${llmErr}).`,
           ),
           sources,
           meta: 'retrieval-only',
@@ -522,9 +608,23 @@ export default function App() {
             <Send size={17} strokeWidth={2.4} />
           </button>
         </div>
-        <p className="mt-2 text-center text-[11px] text-slate-600">
-          Diproses 100% di perangkat Anda · Jawaban LexisAI bukan nasihat hukum.
-        </p>
+        <div className="mt-2 flex items-center justify-center gap-2 text-[11px] text-slate-600">
+          <label className="flex cursor-pointer items-center gap-1.5 select-none">
+            <input
+              type="checkbox"
+              checked={aiMode ?? hasWebGPU === true}
+              onChange={(e) => setAiMode(e.target.checked)}
+              className="h-3 w-3 accent-gold-500"
+            />
+            <Sparkles size={11} className="text-gold-400" />
+            Susun jawaban AI
+            {hasWebGPU === false && (
+              <span className="text-slate-700">(unduh ±512MB, lambat di perangkat ini)</span>
+            )}
+          </label>
+          <span>·</span>
+          <span>Diproses 100% di perangkat Anda · Bukan nasihat hukum.</span>
+        </div>
       </footer>
       <ReloadPrompt />
     </div>

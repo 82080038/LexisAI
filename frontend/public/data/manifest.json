@@ -1,8 +1,15 @@
 {
-  "version": "2026-10-04T00:24:50Z",
+  "version": "2026-10-04T19:14:39Z",
   "dim": 384,
   "model": "Xenova/all-MiniLM-L6-v2",
   "docs": [
+    {
+      "key": "uu-1-1946",
+      "file": "uu-1-1946.json",
+      "chunks": 580,
+      "bytes": 625781,
+      "sha256": "f13a28fa13d415939f88bda999367247d78cc1f39b25a59bee191e1d6eb2b36c"
+    },
     {
       "key": "uu-8-1981",
       "file": "uu-8-1981.json",

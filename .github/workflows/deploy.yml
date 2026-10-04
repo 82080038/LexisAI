@@ -33,6 +33,8 @@ jobs:
         env:
           # subpath repo: https://<user>.github.io/LexisAI/
           VITE_BASE: /LexisAI/
+          # korpus ikut di-deploy di bawah subpath yang sama
+          VITE_CORPUS_BASE: /LexisAI/data
         run: |
           npm ci
           npm run build

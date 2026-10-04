@@ -15,6 +15,7 @@ Jalankan:  venv/bin/python scripts/export_index.py
 import base64
 import hashlib
 import json
+import re
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -39,6 +40,15 @@ def quantize_int8(vectors: np.ndarray) -> tuple[str, float]:
 
 
 def main() -> None:
+    # Guard: FE meng-embed query dengan Xenova/all-MiniLM-L6-v2 (dim 384).
+    # Bila koleksi di-ingest via OpenAI embeddings, vektor tidak kompatibel —
+    # export harus ditolak daripada menghasilkan index yang skornya garbage.
+    if config.OPENAI_API_KEY:
+        raise RuntimeError(
+            "OPENAI_API_KEY aktif: koleksi kemungkinan di-embed dengan model "
+            "OpenAI yang tidak kompatibel dengan embedder FE (all-MiniLM-L6-v2). "
+            "Unset OPENAI_API_KEY dan re-ingest dengan embedding lokal sebelum export."
+        )
     store = get_vector_store()
     res = store.get(include=["embeddings", "documents", "metadatas"])
     ids, docs, metas = res["ids"], res["documents"], res["metadatas"]
@@ -63,7 +73,13 @@ def main() -> None:
     for (nomor, tahun), idx in sorted(
         groups.items(), key=lambda kv: (kv[0][1], kv[0][0])
     ):
-        idx.sort(key=lambda i: int(ids[i].rsplit("-", 1)[-1]))
+        # Urutan chunk mengikuti suffix enumerasi di ID; fallback ke urutan
+        # koleksi bila format ID berubah (jangan biarkan ValueError mematikan export).
+        def _ord(i: int) -> int:
+            m = re.search(r"-(\d+)$", ids[i])
+            return int(m.group(1)) if m else i
+
+        idx.sort(key=_ord)
         chunks = [
             {
                 "id": ids[i],

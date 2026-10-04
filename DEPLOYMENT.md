@@ -102,7 +102,8 @@ CORS di HF Datasets sudah terbuka untuk fetch publik.
 ## E. Kebutuhan browser user
 
 - **Retrieval + baca pasal**: semua browser modern (WASM).
-- **Jawaban LLM (WebLLM)**: WebGPU — Chrome/Edge desktop, sebagian Android.
-  Tanpa WebGPU (Firefox lama, iOS Safari) → mode retrieval-only otomatis.
+- **Jawaban LLM**: WebGPU (Chrome/Edge desktop, sebagian Android) →
+  `Qwen2.5-1.5B` via WebLLM. Tanpa WebGPU → `Qwen2.5-0.5B` via Transformers.js
+  WASM ("mode ringan"). Bila keduanya gagal → retrieval-only otomatis.
 - Unduhan pertama: ~16MB korpus + ~25MB embedding (saat tanya pertama) +
   ~1GB bobot LLM (saat generate pertama, opsional & tercache permanen).

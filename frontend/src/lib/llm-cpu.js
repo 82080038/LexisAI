@@ -4,6 +4,7 @@
 // sebagai fallback senyap agar app selalu menjawab.
 
 import { getTjs } from './tjs'
+import { SYSTEM_PROMPT, buildUserPrompt } from './prompt'
 
 // Bake-off Okt 2026 (tests/bakeoff.mjs): 1B-class tidak layak di WASM —
 // gemma-3-1b-it error onnxruntime (arsitektur tak didukung), Qwen2.5-1.5B
@@ -17,42 +18,46 @@ let pipePromise = null
 
 function getGenerator(onProgress) {
   if (!pipePromise) {
-    pipePromise = getTjs().then(({ pipeline }) =>
-      pipeline('text-generation', CPU_MODEL, {
-        // q8 = default v3 utk wasm; file 512MB (vs q4 786MB), akurasi > q4
-        dtype: 'q8',
-        device: 'wasm',
-        progress_callback: (p) => {
-          if (p.status === 'progress' && p.total) {
-            onProgress?.({
-              text: `Unduh model ringan ${p.file || ''}…`,
-              progress: p.loaded / p.total,
-            })
-          }
-        },
-      }),
-    )
+    pipePromise = getTjs()
+      .then(({ pipeline }) =>
+        pipeline('text-generation', CPU_MODEL, {
+          // q8 = default v3 utk wasm; file 512MB (vs q4 786MB), akurasi > q4
+          dtype: 'q8',
+          device: 'wasm',
+          progress_callback: (p) => {
+            if (p.status === 'progress' && p.total) {
+              onProgress?.({
+                text: `Unduh model ringan ${p.file || ''}…`,
+                progress: p.loaded / p.total,
+              })
+            }
+          },
+        }),
+      )
+      .catch((e) => {
+        // Jangan cache rejection — retry setelah error transient harus bisa.
+        pipePromise = null
+        throw e
+      })
   }
   return pipePromise
 }
-
-const SYSTEM_PROMPT = `Anda adalah "LexisAI", asisten ahli hukum Indonesia yang cerdas, objektif, dan presisi. Tugas utama Anda adalah menjawab pertanyaan hukum atau menganalisis kasus berdasarkan KUMPULAN DOKUMEN HUKUM (KONTEKS) yang diberikan.
-
-ATURAN UTAMA:
-1. Jawablah pertanyaan HANYA berdasarkan informasi atau pasal yang ada di dalam Konteks.
-2. Jika jawaban tidak ditemukan di dalam Konteks, Anda WAJIB menyatakan secara jujur bahwa informasi tersebut tidak tersedia di dalam database peraturan yang ada. Jangan berhalusinasi atau mereka-reka pasal.
-3. Selalu sebutkan sumber rujukan secara spesifik, seperti nama undang-undang, nomor pasal, ayat, atau bab yang tercantum pada Konteks.
-4. Gunakan bahasa Indonesia yang formal, lugas, mudah dipahami, dan objektif.
-5. Berikan analisis unsur pasal secara sistematis jika diminta mengkaji suatu peristiwa.
-6. Di akhir jawaban, tambahkan catatan penolakan tanggung jawab (disclaimer) bahwa jawaban ini bersifat informatif dan pengguna disarankan berkonsultasi dengan advokat resmi untuk tindakan hukum nyata.`
 
 /**
  * Generate jawaban streaming di CPU. onToken(accText) dipanggil tiap token.
  */
 // Prefill CPU lambat & KV cache makan RAM — pangkas konteks RAG
-// (GPU tier tetap memakai konteks penuh 5 pasal).
+// (GPU tier tetap memakai konteks penuh 5 pasal). Potong di batas
+// chunk agar pasal tidak terputus di tengah kalimat.
 const MAX_CTX_CHARS = 2000
 const MAX_NEW_TOKENS = 256
+
+function truncateContext(context, maxChars) {
+  if (context.length <= maxChars) return context
+  const cut = context.lastIndexOf('\n\n---\n\n', maxChars)
+  const end = cut > 0 ? cut : maxChars // fallback: potong paksa bila tak ada batas
+  return context.slice(0, end) + '\n\n[…konteks dipangkas…]'
+}
 
 export async function generateAnswerCPU(
   question,
@@ -60,9 +65,7 @@ export async function generateAnswerCPU(
   onProgress,
   onToken,
 ) {
-  if (context.length > MAX_CTX_CHARS) {
-    context = context.slice(0, MAX_CTX_CHARS) + '\n[…konteks dipangkas…]'
-  }
+  context = truncateContext(context, MAX_CTX_CHARS)
   const gen = await getGenerator(onProgress)
   const { TextStreamer } = await getTjs()
 
@@ -78,10 +81,7 @@ export async function generateAnswerCPU(
 
   const messages = [
     { role: 'system', content: SYSTEM_PROMPT },
-    {
-      role: 'user',
-      content: `FORMAT KONTEKS DARI DATABASE:\n[Kandungan Teks Pasal/Dokumen Hukum dari PDF: ${context}]\n\nPERTANYAAN PENGGUNA:\n${question}`,
-    },
+    { role: 'user', content: buildUserPrompt(question, context) },
   ]
 
   await gen(messages, {

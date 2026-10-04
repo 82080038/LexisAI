@@ -121,6 +121,7 @@ try {
         () =>
           document.body.innerText.includes('Dasar hukum') ||
           document.body.innerText.includes('Gagal'),
+        undefined,
         { timeout: 120000 },
       )
       .catch(() => report.errors.push('offline query timeout'))

@@ -55,6 +55,8 @@ def answer(query: str, context: str, client: OpenAI) -> str:
 
 
 def main():
+    import sys
+
     client = get_llm_client()
     store = get_vector_store()
 
@@ -63,6 +65,17 @@ def main():
         print("[MODE LOKAL] Tidak ada backend LLM - hanya retrieval konteks.")
     else:
         print(f"Backend LLM: {backend}")
+
+    # Mode one-shot: `main.py "pertanyaan"` -> jawab sekali lalu keluar.
+    if len(sys.argv) > 1:
+        query = " ".join(sys.argv[1:])
+        context = retrieve_context(query, store)
+        if client is None:
+            print("\n--- Konteks terambil ---\n" + context)
+        else:
+            print("\n" + answer(query, context, client))
+        return
+
     print("LexisAI - Asisten Hukum Indonesia (ketik 'exit' untuk keluar)")
     while True:
         query = input("\nPertanyaan> ").strip()

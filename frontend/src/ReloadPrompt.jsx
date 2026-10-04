@@ -1,12 +1,36 @@
+import { useEffect, useRef } from 'react'
 import { useRegisterSW } from 'virtual:pwa-register/react'
 import { RefreshCw, X } from 'lucide-react'
 
-// Toast "versi baru tersedia" saat service worker menemukan build baru.
+// Waktu evaluasi modul ≈ saat aplikasi mulai dimuat.
+const BOOT_AT = performance.now()
+// Update yang sudah menunggu SEBELUM user sempat berinteraksi dianggap
+// "baru masuk" — langsung diterapkan tanpa prompt.
+const AUTO_APPLY_MS = 5000
+// Interval cek update selama sesi aktif (30 menit).
+const CHECK_INTERVAL_MS = 30 * 60 * 1000
+
+// Toast "versi baru tersedia" saat SW menemukan build baru DI TENGAH sesi.
 export default function ReloadPrompt() {
   const {
     needRefresh: [needRefresh, setNeedRefresh],
     updateServiceWorker,
-  } = useRegisterSW()
+  } = useRegisterSW({
+    onRegisteredSW(_swUrl, registration) {
+      if (registration) {
+        setInterval(() => registration.update(), CHECK_INTERVAL_MS)
+      }
+    },
+  })
+  const applied = useRef(false)
+
+  useEffect(() => {
+    const freshVisit = performance.now() - BOOT_AT < AUTO_APPLY_MS
+    if (needRefresh && freshVisit && !applied.current) {
+      applied.current = true
+      updateServiceWorker(true)
+    }
+  }, [needRefresh, updateServiceWorker])
 
   if (!needRefresh) return null
 

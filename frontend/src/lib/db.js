@@ -1,20 +1,30 @@
 // IndexedDB minimal wrapper — cache korpus di komputer user.
 // Store 'docs': key -> {sha256, payload} | Store 'meta': k -> v
+// Satu koneksi DB dipakai bersama (lazy) — sebelumnya setiap operasi
+// membuka koneksi baru (100+ per boot).
 
 const DB_NAME = 'lexisai-corpus'
 const DB_VERSION = 1
 
+let dbPromise = null
+
 function openDB() {
-  return new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB_NAME, DB_VERSION)
-    req.onupgradeneeded = () => {
-      const db = req.result
-      if (!db.objectStoreNames.contains('docs')) db.createObjectStore('docs')
-      if (!db.objectStoreNames.contains('meta')) db.createObjectStore('meta')
-    }
-    req.onsuccess = () => resolve(req.result)
-    req.onerror = () => reject(req.error)
-  })
+  if (!dbPromise) {
+    dbPromise = new Promise((resolve, reject) => {
+      const req = indexedDB.open(DB_NAME, DB_VERSION)
+      req.onupgradeneeded = () => {
+        const db = req.result
+        if (!db.objectStoreNames.contains('docs')) db.createObjectStore('docs')
+        if (!db.objectStoreNames.contains('meta')) db.createObjectStore('meta')
+      }
+      req.onsuccess = () => resolve(req.result)
+      req.onerror = () => reject(req.error)
+    }).catch((e) => {
+      dbPromise = null // retry bersih pada panggilan berikutnya
+      throw e
+    })
+  }
+  return dbPromise
 }
 
 function tx(db, store, mode, fn) {

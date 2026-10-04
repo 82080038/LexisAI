@@ -24,6 +24,17 @@ from src.database import get_vector_store
 from src.llm import get_llm_client, get_llm_model
 
 
+_EMBED_CLIENT: OpenAI | None = None
+
+
+def _openai_client() -> OpenAI:
+    """Client embedding OpenAI — lazy singleton, bukan per-request."""
+    global _EMBED_CLIENT
+    if _EMBED_CLIENT is None:
+        _EMBED_CLIENT = OpenAI(api_key=config.OPENAI_API_KEY)
+    return _EMBED_CLIENT
+
+
 # ---------------------------------------------------------------------------
 # Retrieval dengan sitasi terstruktur
 # ---------------------------------------------------------------------------
@@ -31,8 +42,7 @@ from src.llm import get_llm_client, get_llm_model
 def retrieve(query: str, store, top_k: int = 5) -> tuple[str, list[dict[str, Any]]]:
     """Ambil pasal relevan; kembalikan (konteks_teks, daftar_sumber)."""
     if config.OPENAI_API_KEY:
-        client = OpenAI(api_key=config.OPENAI_API_KEY)
-        emb = client.embeddings.create(
+        emb = _openai_client().embeddings.create(
             model=config.EMBEDDING_MODEL, input=[query]
         )
         results = store.query(

@@ -106,8 +106,17 @@ def main():
     mode = "regex" if args.fast else ("llm" if enhancer else "llm (tanpa enhancer)")
     print(f"Mode: {mode} | Dokumen: {len(pdfs)}")
 
-    total = sum(ingest_file(p, cleaner, chunker, embedder) for p in pdfs)
-    print(f"Selesai. Total {total} chunk dari {len(pdfs)} dokumen.")
+    total, failed = 0, []
+    for p in pdfs:
+        try:
+            total += ingest_file(p, cleaner, chunker, embedder)
+        except Exception as e:  # satu PDF gagal tidak boleh menghentikan batch
+            failed.append(p.name)
+            print(f"[GAGAL] {p.name}: {e}")
+    print(f"Selesai. Total {total} chunk dari {len(pdfs) - len(failed)} dokumen.")
+    if failed:
+        print(f"{len(failed)} dokumen gagal: {', '.join(failed)}")
+        sys.exit(1)
 
 
 if __name__ == "__main__":
