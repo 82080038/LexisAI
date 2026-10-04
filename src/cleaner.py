@@ -8,6 +8,7 @@ import re
 
 from src.config import load_prompt
 from src.llm import get_llm_client, get_llm_model
+from src.ocr_fix import OCRWordFixer
 
 PAGE_MARK = re.compile(r"^\s*<<<PAGE\s+(\d+)>>>\s*$", re.MULTILINE)
 # Struktur hukum yang TIDAK BOLEH dihapus walau sering muncul di tepi halaman
@@ -32,6 +33,22 @@ class LegalTextCleaner:
         self.use_llm = use_llm
         self.client = get_llm_client() if use_llm else None
 
+    # Satu fixer bersama untuk seluruh corpus: cache hunspell (_spell/_sugg)
+    # ter-akumulasi lintas dokumen — vocab unik korpus ~19k, bukan per-PDF.
+    _FIXER: "OCRWordFixer | None" = None
+    _FIXER_TRIED = False
+
+    @classmethod
+    def word_fixer(cls) -> OCRWordFixer | None:
+        """Lazy: hunspell mungkin tidak terinstall di semua lingkungan."""
+        if not cls._FIXER_TRIED:
+            cls._FIXER_TRIED = True
+            try:
+                cls._FIXER = OCRWordFixer()
+            except Exception:
+                cls._FIXER = None
+        return cls._FIXER
+
     def clean(self, raw_text: str) -> str:
         """Bersihkan teks mentah dari artefak PDF/OCR."""
         # 0. Bersih per-halaman dulu (marker <<<PAGE n>>> dari extract_text):
@@ -49,6 +66,9 @@ class LegalTextCleaner:
         text = self._strip_running_headers(text)
         text = self._strip_watermarks(text)
         text = self._fix_ocr_artifacts(text)
+        fixer = self.word_fixer()
+        if fixer is not None:
+            text = fixer.fix_text(text)
         text = self._normalize_whitespace(text)
         if self.use_llm:
             text = self._clean_with_llm(text)
