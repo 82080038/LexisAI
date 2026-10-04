@@ -11,7 +11,7 @@ from src.database import get_vector_store
 from src.llm import get_llm_client, get_llm_model
 
 
-def retrieve_context(query: str, store, top_k: int = 5) -> str:
+def retrieve_context(query: str, store, top_k: int = 10) -> str:
     """Cari pasal paling relevan dari vector database.
 
     Menggunakan query_texts agar embedding query dihitung oleh fungsi
